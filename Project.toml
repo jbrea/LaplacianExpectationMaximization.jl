@@ -1,0 +1,33 @@
+name = "FitPopulations"
+uuid = "610349f3-aa2e-4e53-b232-3ba00964b24d"
+authors = ["Johanni Brea <jbrea@users.noreply.github.com>"]
+version = "0.1.0"
+
+[deps]
+ComponentArrays = "b0b7db55-cfe3-40fc-9ded-d10e2dbeff66"
+ConcreteStructs = "2569d6c7-a4a2-43d3-a901-331e8e4be471"
+Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
+DocStringExtensions = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
+Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
+ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+NLopt = "76087f3c-5699-56af-9a33-bf431cd00edd"
+Optim = "429524aa-4258-5aef-a3af-852621145aeb"
+Optimisers = "3bd65402-5787-11e9-1adc-39752487f4e2"
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+
+[compat]
+ComponentArrays = "0.15"
+ConcreteStructs = "0.2"
+Distributions = "0.25"
+DocStringExtensions = "0.9"
+Enzyme = "0.11"
+ForwardDiff = "0.10"
+LinearAlgebra = "1"
+NLopt = "1"
+Optim = "1"
+Optimisers = "0.3"
+Printf = "1"
+Random = "1"
+julia = "1.10"
