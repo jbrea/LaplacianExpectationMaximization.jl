@@ -12,9 +12,9 @@
 <!-- travis-ci.com badge, uncomment or delete as needed, depending on whether you are using that service. -->
 <!-- [![Build Status](https://travis-ci.com/jbrea/FitPopulations.jl.svg?branch=master)](https://travis-ci.com/jbrea/FitPopulations.jl) -->
 <!-- Coverage badge on codecov.io, which is used by default. -->
-[![codecov.io](http://codecov.io/github/jbrea/FitPopulations.jl/coverage.svg?branch=master)](http://codecov.io/github/jbrea/FitPopulations.jl?branch=master)
+[![codecov.io](http://codecov.io/github/jbrea/FitPopulations.jl/coverage.svg?branch=main)](http://codecov.io/github/jbrea/FitPopulations.jl?branch=master)
 <!-- Documentation -- uncomment or delete as needed -->
-[![Documentation](https://img.shields.io/badge/docs-master-blue.svg)](https://jbrea.github.io/FitPopulations.jl/dev)
+[![Documentation](https://img.shields.io/badge/docs-main-blue.svg)](https://jbrea.github.io/FitPopulations.jl/dev)
 <!--
 [![Documentation](https://img.shields.io/badge/docs-stable-blue.svg)](https://jbrea.github.io/FitPopulations.jl/stable)
 -->

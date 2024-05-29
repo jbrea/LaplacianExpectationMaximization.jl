@@ -45,13 +45,12 @@ end
     prior
     shared
 end
-PopulationModel(model, prior, shared::Symbol) = PopulationModel(model, prior, (shared,))
 """
     PopulationModel(model; prior = DiagonalNormalPrior(), shared = ())
 
 Wrap a model for estimating population parameters. Shared parameters should be given as a tuple of symbols.
 """
-PopulationModel(model; prior = DiagonalNormalPrior(), shared = ()) = PopulationModel(model, prior, shared)
+PopulationModel(model; prior = DiagonalNormalPrior(), shared = ()) = PopulationModel(model, prior, isa(shared, Symbol) ? (shared,) : shared)
 function parameters(m::PopulationModel)
     params = parameters(m.model)
     params_nonshared = drop(params, m.shared)
