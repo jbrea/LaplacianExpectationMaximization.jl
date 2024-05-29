@@ -1,4 +1,6 @@
 [deps]
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+ConcreteStructs = "2569d6c7-a4a2-43d3-a901-331e8e4be471"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 FitPopulations = "610349f3-aa2e-4e53-b232-3ba00964b24d"
 
