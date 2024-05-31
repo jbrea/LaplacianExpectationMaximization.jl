@@ -9,7 +9,7 @@ For a sequence of binary values ``y = (y_1, \ldots, y_T)`` we define a habituati
 We define the model `HabituatingBiasedCoin` with state variable `w` and extend the functions `parameters, initialize!, logp` and `sample` from `FitPopulations`.
 
 ```@example hbc
-import FitPopulations: parameters, logp, sample, initialize!
+using FitPopulations
 using ConcreteStructs, Distributions
 
 @concrete struct HabituatingBiasedCoin
@@ -17,15 +17,15 @@ using ConcreteStructs, Distributions
 end
 HabituatingBiasedCoin() = HabituatingBiasedCoin(Base.RefValue(0.))
 
-function initialize!(m::HabituatingBiasedCoin, parameters)
+function FitPopulations.initialize!(m::HabituatingBiasedCoin, parameters)
     m.w[] = parameters.w₀
 end
 
-parameters(::HabituatingBiasedCoin) = (; w₀ = 0., η = 0.)
+FitPopulations.parameters(::HabituatingBiasedCoin) = (; w₀ = 0., η = 0.)
 
 sigmoid(w) = 1/(1 + exp(-w))
 
-function logp(data, m::HabituatingBiasedCoin, parameters)
+function FitPopulations.logp(data, m::HabituatingBiasedCoin, parameters)
     initialize!(m, parameters)
     η = parameters.η
     logp = 0.
@@ -37,7 +37,7 @@ function logp(data, m::HabituatingBiasedCoin, parameters)
     logp
 end
 
-function sample(rng, ::Any, m::HabituatingBiasedCoin, ::Any)
+function FitPopulations.sample(rng, ::Any, m::HabituatingBiasedCoin, ::Any)
     rand(rng) ≤ sigmoid(m.w[])
 end
 ```
