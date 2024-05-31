@@ -10,7 +10,7 @@ function parameters end
 
 Initalizes the state of the model.
 """
-function initialize! end
+function initialize!(model, parameters) end
 
 """
     logp(data, model, parameters)
