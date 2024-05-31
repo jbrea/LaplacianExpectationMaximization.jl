@@ -9,6 +9,7 @@ For a sequence of binary values ``y = (y_1, \ldots, y_T)`` we define a habituati
 We define the model `HabituatingBiasedCoin` with state variable `w` and extend the functions `parameters, initialize!, logp` and `sample` from `FitPopulations`.
 
 ```@example hbc
+# import FitPopulations: parameters, initialize!, logp, sample # if you want to avoid writing FitPopulations.logp etc. 
 using FitPopulations
 using ConcreteStructs, Distributions
 
@@ -26,7 +27,7 @@ FitPopulations.parameters(::HabituatingBiasedCoin) = (; w₀ = 0., η = 0.)
 sigmoid(w) = 1/(1 + exp(-w))
 
 function FitPopulations.logp(data, m::HabituatingBiasedCoin, parameters)
-    initialize!(m, parameters)
+    FitPopulations.initialize!(m, parameters)
     η = parameters.η
     logp = 0.
     for yₜ in data
@@ -66,7 +67,7 @@ gradient_logp(data[1], model, params)
 If this fails, it is recommended to check that `logp` does not allocate, e.g. with
 ```@example hbc
 using BenchmarkTools
-@benchmark logp($(data[1]), $model, $params)
+@benchmark FitPopulations.logp($(data[1]), $model, $params)
 ```
 
 We also check if Hessians are properly computed.
