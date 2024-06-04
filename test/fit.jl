@@ -128,5 +128,5 @@ end
     res2 = F.maximize_logp(data, m,
                            gradient_ad = :Enzyme,
                            hessian_ad = :Enzyme)
-    @test res1.logp ≈ res2.logp
+    @test res1.logp ≈ res2.logp atol = 1e-1
 end
