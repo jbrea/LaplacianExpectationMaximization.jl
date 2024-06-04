@@ -35,6 +35,8 @@ end
 ### convert
 _convert_eltype(T, x::AbstractArray) = _convert_eltype.(T, x)
 _convert_eltype(T, x::Number) = T(x)
+_convert_eltype(::Any, x::Bool) = x
+_convert_eltype(::Any, x::Int) = x
 _convert_eltype(T, x::Base.RefValue) = Ref(_convert_eltype(T, x[]))
 _convert_eltype(T, x::Tuple) = _convert_eltype.(T, x)
 _convert_eltype(T, x::NamedTuple{K}) where K = NamedTuple{K}(_convert_eltype.(T, values(x)))

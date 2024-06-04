@@ -68,3 +68,12 @@
     h!(H, p)
     @test H ≈ FiniteDiff.finite_difference_hessian(p -> F.logp(data, m, p), p) rtol = 1e-4
 end
+
+@testset "ForwardDiff & Enzyme" begin
+    m = BiasedCoin()
+    p = ComponentArray(F.parameters(m))
+    dp = zero(p)
+    data, = F.simulate(m, p)
+    @test F.gradient_logp(data, m, p, ad = :ForwardDiff) == F.gradient_logp(data, m, p, ad = :Enzyme)
+    @test F.hessian_logp(data, m, p, ad = :ForwardDiff) == F.hessian_logp(data, m, p, ad = :Enzyme)
+end

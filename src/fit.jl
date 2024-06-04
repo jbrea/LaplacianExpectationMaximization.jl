@@ -128,12 +128,12 @@ function fix(parameters, fixed, coupled)
     end
     (x, mask_idxs, drop(parameters, union(keys(fixed), Base.tail.(coupled)...)))
 end
-function fix(data, model, parameters, fixed, coupled, λ)
+function fix(data, model, parameters, fixed, coupled, λ; gradient_ad = :Enzyme, hessian_ad = :ForwardDiff)
     x, mask_idxs, params = fix(parameters, fixed, coupled)
     (Fix(mask_idxs,
-        HessLogP(data, model, x),
+        HessLogP(data, model, x; ad = hessian_ad),
         zeros(length(x), length(x)),
-        GradLogP(data, model, x),
+        GradLogP(data, model, x; ad = gradient_ad),
         zero(x),
         x -> logp(data, model, x),
         copy(x),
@@ -223,17 +223,17 @@ _parameters(p::PopGradLogP) = [_parameters(g) for g in p.g_funcs]
 ### gradient function
 ###
 
-function gradient_function(data, model, parameters, fixed, coupled, λ)
-    fix(data, model, parameters, fixed, coupled, λ)
+function gradient_function(data, model, parameters, fixed, coupled, λ; kw...)
+    fix(data, model, parameters, fixed, coupled, λ; kw...)
 end
 function all_parameters(ps, shared)
     _ps = Array.(drop.(ps, Ref((shared..., :population_parameters))))
     float.(vcat(_ps..., Array(ps[1][shared])))
 end
-function gradient_function(data, model::PopulationModel, parameters, fixed, coupled, λ)
+function gradient_function(data, model::PopulationModel, parameters, fixed, coupled, λ; kw...)
     _parameters = drop_population_parameters(model.prior, ComponentArray(parameters), fixed)
     fixed = merge(fixed, (; population_parameters = _parameters.population_parameters))
-    tmp = [fix(d, model, _parameters, fixed, coupled, λ) for d in data]
+    tmp = [fix(d, model, _parameters, fixed, coupled, λ; kw...) for d in data]
     gs = first.(tmp); ps = last.(tmp)
     (PopGradLogP(gs, ps, model.shared),
      all_parameters(ps, drop(model.shared,
@@ -280,10 +280,13 @@ function maximize_logp(data, model, parameters = ComponentArray(parameters(model
         coupled = [],
         optimizer = default_optimizer(model, parameters, fixed),
         evaluation = (;),
+        hessian_ad = :ForwardDiff,
+        gradient_ad = :Enzyme,
         kw...)
     gfunc, params = gradient_function(data, model, parameters,
                                       NamedTuple(fixed),
-                                      coupled, lambda_l2)
+                                      coupled, lambda_l2;
+                                      gradient_ad, hessian_ad)
     g! = wrap_tracker(gfunc, params; verbosity, print_interval)
     res = if isa(optimizer, LaplaceEM)
         maximize(optimizer, model, g!, params; verbosity, evaluation, kw...)

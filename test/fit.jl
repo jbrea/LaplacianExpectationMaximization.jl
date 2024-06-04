@@ -116,3 +116,17 @@
     @test dp ≈ ForwardDiff.gradient(f_fd, _p)
     @test H ≈ ForwardDiff.hessian(f_fd, _p)
 end
+
+@testset "maximize_logp" begin
+    m = HabituatingBiasedCoin()
+    p = ComponentArray(F.parameters(m))
+    p.w₀ = .1; p.η = -.2
+    data, = F.simulate(m, p, n_steps = 200)
+    res1 = F.maximize_logp(data, m,
+                           gradient_ad = :ForwardDiff,
+                           hessian_ad = :ForwardDiff)
+    res2 = F.maximize_logp(data, m,
+                           gradient_ad = :Enzyme,
+                           hessian_ad = :Enzyme)
+    @test res1.logp ≈ res2.logp
+end
