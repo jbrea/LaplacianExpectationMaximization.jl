@@ -75,5 +75,5 @@ end
     dp = zero(p)
     data, = F.simulate(m, p)
     @test F.gradient_logp(data, m, p, ad = :ForwardDiff) == F.gradient_logp(data, m, p, ad = :Enzyme)
-    @test F.hessian_logp(data, m, p, ad = :ForwardDiff) == F.hessian_logp(data, m, p, ad = :Enzyme)
+    @test_broken F.hessian_logp(data, m, p, ad = :ForwardDiff) == F.hessian_logp(data, m, p, ad = :Enzyme) # see e.g. https://github.com/EnzymeAD/Enzyme.jl/issues/1385
 end

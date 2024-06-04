@@ -45,7 +45,7 @@ function _grad1(logp, dlogp, data, ddata, model, params, dparams)
     autodiff_deferred(Reverse, logp!,
                       DuplicatedNoNeed(logp, dlogp),
                       DuplicatedNoNeed(data, ddata),
-                      model,
+                      Const(model),
                       Duplicated(params, dparams))
     nothing
 end
