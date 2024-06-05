@@ -77,6 +77,7 @@ end
     m1 = F.PopulationModel(BiasedCoin(), prior = F.DiagonalNormalPrior())
     data = [simulate(m1.model, (; w = .3), n_steps = 20)[1] for _ in 1:20]
     res1 = F.maximize_logp(data, m1, iterations = 5, Estep = (maxeval = 10^3,), verbosity = 0)
+    res1fw = F.maximize_logp(data, m1, iterations = 5, Estep = (maxeval = 10^3,), verbosity = 0, gradient_ad = :ForwardDiff)
     m2 = F.PopulationModel(BiasedCoin(), prior = F.DiagonalNormalPrior(), shared = :w)
     res2 = F.maximize_logp(data, m2, maxeval = 10^4, verbosity = 0)
     @test sigmoid(res2.parameters[1].w) ≈ mean(vcat(data...))

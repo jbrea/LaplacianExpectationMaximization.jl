@@ -289,14 +289,14 @@ function maximize_logp(data, model, parameters = ComponentArray(parameters(model
                                       gradient_ad, hessian_ad)
     g! = wrap_tracker(gfunc, params; verbosity, print_interval)
     res = if isa(optimizer, LaplaceEM)
-        maximize(optimizer, model, g!, params; verbosity, evaluation, kw...)
+        maximize(optimizer, data, model, params, g!; verbosity, evaluation, kw...)
     else
         if !isempty(evaluation)
             evaluations = [evaluate(data, evaluation.test_data, model,
                                     population_parameters(g!);
                                     drop(evaluation, (:test_data,))...)]
         end
-        _res = maximize_failsafe(optimizer, model, g!, params; verbosity, kw...)
+        _res = maximize_failsafe(optimizer, data, model, params, g!; verbosity, kw...)
         if !isempty(evaluation)
             push!(evaluations, evaluate(data, evaluation.test_data, model,
                                         population_parameters(g!);
@@ -323,19 +323,19 @@ maximize_logp(data, model, p::NamedTuple; kw...) = maximize_logp(data, model, Co
 ###
 ### maximize
 ###
-function maximize_failsafe(opt, model, g!, params; kw...)
+function maximize_failsafe(opt, data, model, params, g!; kw...)
     try
         # reset fmax
         g!.fmax[] = -Inf
-        maximize(opt, model, g!, params; kw...)
+        maximize(opt, data, model, params, g!; kw...)
     catch e
         @error e
         @info "Optimizing with Adam instead of $opt."
         g!.fmax[] = -Inf
-        maximize(Adam(), model, g!, params; kw...)
+        maximize(Adam(), data, model, params, g!; kw...)
     end
 end
-function maximize(opt::Optimisers.AbstractRule, model, g!, params;
+function maximize(opt::Optimisers.AbstractRule, data, model, params, g!;
                   maxeval = 10^6, maxtime = 3600, min_grad_norm = 1e-8,
                   lb = -Inf, ub = Inf, verbosity = 1)
     tstart = time()
@@ -353,7 +353,7 @@ function maximize(opt::Optimisers.AbstractRule, model, g!, params;
     end
     (; opt, extra = (; lc, gns, dparams))
 end
-function maximize(opt::Symbol, model, g!, params;
+function maximize(opt::Symbol, data, model, params, g!;
                   lb = -Inf, ub = Inf, maxeval = 10^6,
                   maxtime = 3600, lopt = :LD_LBFGS, verbosity = 1)
     if opt === :MLSL
@@ -389,7 +389,7 @@ function (s::SwapSign)(f, g, H, x)
     f === nothing || return -res
     nothing
 end
-function maximize(opt::Optim.AbstractOptimizer, model, g!, params; maxeval = 10^6, iterations = 10^6, verbosity = 1, kw...)
+function maximize(opt::Optim.AbstractOptimizer, data, model, params, g!; maxeval = 10^6, iterations = 10^6, verbosity = 1, kw...)
     (; extra = Optim.optimize(Optim.only_fgh!(SwapSign(g!)), params, opt, Optim.Options(; iterations, f_calls_limit = maxeval, kw...)))
 end
 
@@ -412,22 +412,21 @@ function mstep!(::DiagonalNormalPrior, g!, Hs)
         end
     end
 end
-function maximize(::LaplaceEM, model, g!, params;
+function maximize(::LaplaceEM, data, model, params, g!;
         iterations = 10, Estep = (;), evaluation = (;),
         verbosity = 1, derivative_threshold = 1e-3)
     Estep = merge((; opt = default_optimizer(model.model, params, ())), Estep)
     evaluation = merge((; test_data = nothing), evaluation)
     dp = zero(g!.xmax)
     g!.xmax .= params
-    train_data = [g.g!.data.val for g in g!.g.g_funcs]
     _population_parameters = population_parameters(g!)
-    evaluations = [evaluate(train_data, evaluation.test_data, model,
+    evaluations = [evaluate(data, evaluation.test_data, model,
                             _population_parameters;
                             drop(evaluation, (:test_data,))...)]
     m_old, s_old = map(f -> f(evaluations[1].train), [mean, std])
     for i in 1:iterations
         # E-step
-        (; extra) = maximize_failsafe(Estep.opt, model, g!, g!.xmax;
+        (; extra) = maximize_failsafe(Estep.opt, data, model, g!.xmax, g!;
                                       drop(Estep, (:opt,))...)
         if verbosity > 1
             @show extra
@@ -451,7 +450,7 @@ function maximize(::LaplaceEM, model, g!, params;
         end
         # evaluation
         _evaluations =
-              evaluate(train_data, evaluation.test_data, model,
+              evaluate(data, evaluation.test_data, model,
                        g!.g.g_funcs[1].x;
                        drop(evaluation, (:test_data,))...)
         m_new, s_new = map(f -> f(_evaluations.train), [mean, std])
