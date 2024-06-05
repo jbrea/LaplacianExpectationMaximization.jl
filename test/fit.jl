@@ -118,15 +118,20 @@
 end
 
 @testset "maximize_logp" begin
+    Random.seed!(123)
     m = HabituatingBiasedCoin()
     p = ComponentArray(F.parameters(m))
     p.w₀ = .1; p.η = -.2
     data, = F.simulate(m, p, n_steps = 200)
     res1 = F.maximize_logp(data, m,
                            gradient_ad = :ForwardDiff,
-                           hessian_ad = :ForwardDiff)
+                           verbosity = 0)
     res2 = F.maximize_logp(data, m,
                            gradient_ad = :Enzyme,
-                           hessian_ad = :Enzyme)
+                           verbosity = 0)
+    res3 = F.maximize_logp(data, m, F.parameters(m),
+                           gradient_ad = :Enzyme,
+                           verbosity = 0)
     @test res1.logp ≈ res2.logp atol = 1e-1
+    @test res3.logp ≈ res2.logp atol = 1e-1
 end

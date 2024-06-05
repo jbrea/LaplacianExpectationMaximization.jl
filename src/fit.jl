@@ -263,7 +263,7 @@ end
 # TODO: Don't require user to specify PopulationModel(model, ...)?
 # TODO: Should I create a separate handling for shared, coupled, fixed, transformed parameters or can I use e.g. ParameterHandling?
 """
-    maximize_logp(data, model, parameters = ComponentArray(parameters(model));
+    maximize_logp(data, model, parameters = parameters(model);
                   fixed = (;)
                   coupled = [],
                   optimizer = default_optimizer(model, parameters, fixed),
@@ -274,16 +274,16 @@ end
                   kw...)
 
 """
-function maximize_logp(data, model, parameters = ComponentArray(parameters(model));
+function maximize_logp(data, model, parameters = parameters(model);
         verbosity = 1, print_interval = 10, fixed = (;), return_g! = false,
         lambda_l2 = 0.,
         coupled = [],
-        optimizer = default_optimizer(model, parameters, fixed),
+        optimizer = default_optimizer(model, ComponentArray(parameters), fixed),
         evaluation = (;),
         hessian_ad = :ForwardDiff,
         gradient_ad = :Enzyme,
         kw...)
-    gfunc, params = gradient_function(data, model, parameters,
+    gfunc, params = gradient_function(data, model, ComponentArray(parameters),
                                       NamedTuple(fixed),
                                       coupled, lambda_l2;
                                       gradient_ad, hessian_ad)
