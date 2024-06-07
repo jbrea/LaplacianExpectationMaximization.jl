@@ -35,73 +35,73 @@ end</code></pre><h3 id="Generating-data"><a class="docs-heading-anchor" href="#G
 model = HabituatingBiasedCoin()
 params = (; w₀ = .3, η = .1)
 data = [simulate(model, params, n_steps = 30).data for _ in 1:5]</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">5-element Vector{Vector{Bool}}:
- [0, 1, 1, 1, 1, 1, 0, 1, 1, 1  …  1, 1, 0, 1, 0, 0, 1, 0, 0, 1]
- [1, 0, 1, 1, 0, 1, 1, 1, 1, 1  …  1, 0, 0, 1, 1, 1, 0, 1, 0, 1]
- [0, 0, 1, 1, 1, 0, 0, 1, 1, 0  …  0, 0, 0, 1, 1, 0, 1, 1, 1, 0]
- [1, 0, 0, 1, 0, 0, 0, 1, 1, 1  …  1, 1, 0, 1, 1, 1, 1, 1, 1, 1]
- [0, 0, 1, 0, 0, 0, 1, 1, 0, 1  …  0, 0, 0, 0, 0, 0, 0, 1, 1, 0]</code></pre><h3 id="Fitting-a-single-model"><a class="docs-heading-anchor" href="#Fitting-a-single-model">Fitting a single model</a><a id="Fitting-a-single-model-1"></a><a class="docs-heading-anchor-permalink" href="#Fitting-a-single-model" title="Permalink"></a></h3><p>First we check, if gradients are properly computed for our model.</p><pre><code class="language-julia hljs">import FitPopulations: gradient_logp
-gradient_logp(data[1], model, params)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">ComponentVector{Float64}(w₀ = -1.0142013663861698, η = -0.6202142081019243)</code></pre><p>If this fails, it is recommended to check that <code>logp</code> does not allocate, e.g. with</p><pre><code class="language-julia hljs">using BenchmarkTools
-@benchmark FitPopulations.logp($(data[1]), $model, $params)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">BenchmarkTools.Trial: 10000 samples with 114 evaluations.
- Range (min … max):  762.044 ns …  1.080 μs  ┊ GC (min … max): 0.00% … 0.00%
- Time  (median):     765.114 ns              ┊ GC (median):    0.00%
- Time  (mean ± σ):   767.410 ns ± 13.272 ns  ┊ GC (mean ± σ):  0.00% ± 0.00%
+ [1, 1, 1, 0, 1, 1, 0, 0, 1, 1  …  0, 0, 1, 0, 0, 0, 0, 1, 0, 1]
+ [1, 1, 1, 1, 0, 0, 0, 1, 1, 1  …  1, 0, 0, 0, 1, 0, 1, 1, 0, 1]
+ [1, 1, 1, 1, 1, 1, 1, 0, 0, 1  …  1, 0, 0, 1, 1, 0, 1, 0, 0, 1]
+ [0, 0, 1, 0, 0, 1, 1, 1, 0, 1  …  1, 1, 0, 1, 1, 1, 1, 0, 1, 1]
+ [0, 0, 0, 1, 1, 1, 0, 1, 1, 1  …  1, 0, 1, 0, 1, 1, 0, 1, 0, 1]</code></pre><h3 id="Fitting-a-single-model"><a class="docs-heading-anchor" href="#Fitting-a-single-model">Fitting a single model</a><a id="Fitting-a-single-model-1"></a><a class="docs-heading-anchor-permalink" href="#Fitting-a-single-model" title="Permalink"></a></h3><p>First we check, if gradients are properly computed for our model.</p><pre><code class="language-julia hljs">import FitPopulations: gradient_logp
+gradient_logp(data[1], model, params)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">ComponentVector{Float64}(w₀ = -1.5122996686495396, η = 1.083363420820136)</code></pre><p>If this fails, it is recommended to check that <code>logp</code> does not allocate, e.g. with</p><pre><code class="language-julia hljs">using BenchmarkTools
+@benchmark FitPopulations.logp($(data[1]), $model, $params)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">BenchmarkTools.Trial: 10000 samples with 115 evaluations.
+ Range (min … max):  761.522 ns … 981.765 ns  ┊ GC (min … max): 0.00% … 0.00%
+ Time  (median):     765.530 ns               ┊ GC (median):    0.00%
+ Time  (mean ± σ):   767.655 ns ±  12.575 ns  ┊ GC (mean ± σ):  0.00% ± 0.00%
 
-  ▃▇█▆▄                                                        ▂
-  █████▅▄▅▃▃▁▁▃▅▇▇▆▆▆▅▅▄▄▅▆▆▆▄▃▄▅▅▅▃▅▄▄▃▅▁▁▃▃▁▃▁▃▃▁▁▃▄▇▇▇▇▇▆▅▅ █
-  762 ns        Histogram: log(frequency) by time       838 ns &lt;
+   ▄▇█▅▁                                                        ▂
+  ██████▄▅██▃▃▃▁▄▅▇▇▇▆▆▅▅▆▇▇▅▆▅▄▄▅▅▅▃▄▄▃▅▃▃▁▁▄▁▃▁▁▁▁▁▃▃▃▆▆▇▇▇▇▇ █
+  762 ns        Histogram: log(frequency) by time        835 ns &lt;
 
  Memory estimate: 0 bytes, allocs estimate: 0.</code></pre><p>We also check if Hessians are properly computed.</p><pre><code class="language-julia hljs">import FitPopulations: hessian_logp
 hessian_logp(data[1], model, params)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">2×2 Matrix{Float64}:
- -4.04412  8.93596
-  8.93596  1.41852</code></pre><p>This may fail, if the model is too restrictive in its type parameters.</p><p>If everything works fine we run the optimizer:</p><pre><code class="language-julia hljs">import FitPopulations: maximize_logp
-result = maximize_logp(data[1], model)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(logp = -8.124524787761827, parameters = (w₀ = -0.0134310854133798, η = -6.213180393886697), extra =  * Status: success
+ -4.07397  12.3782
+ 12.3782   -7.97116</code></pre><p>This may fail, if the model is too restrictive in its type parameters.</p><p>If everything works fine we run the optimizer:</p><pre><code class="language-julia hljs">import FitPopulations: maximize_logp
+result = maximize_logp(data[1], model)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(logp = -8.685257271176573, parameters = (w₀ = 2.330673665753501, η = -5.792690322265109), extra =  * Status: success
 
  * Candidate solution
-    Final objective value:     8.124525e+00
+    Final objective value:     8.685257e+00
 
  * Found with
     Algorithm:     L-BFGS
 
  * Convergence measures
-    |x - x&#39;|               = 1.78e-15 ≰ 0.0e+00
-    |x - x&#39;|/|x&#39;|          = 2.86e-16 ≰ 0.0e+00
+    |x - x&#39;|               = 0.00e+00 ≤ 0.0e+00
+    |x - x&#39;|/|x&#39;|          = 0.00e+00 ≤ 0.0e+00
     |f(x) - f(x&#39;)|         = 0.00e+00 ≤ 0.0e+00
     |f(x) - f(x&#39;)|/|f(x&#39;)| = 0.00e+00 ≤ 0.0e+00
-    |g(x)|                 = 4.84e+00 ≰ 1.0e-08
+    |g(x)|                 = 1.15e+00 ≰ 1.0e-08
 
  * Work counters
     Seconds run:   0  (vs limit Inf)
-    Iterations:    16874
-    f(x) calls:    48353
-    ∇f(x) calls:   48353
+    Iterations:    24362
+    f(x) calls:    71345
+    ∇f(x) calls:   71345
 )</code></pre><p>To inspect the state of the fitted model we can run</p><pre><code class="language-julia hljs">import FitPopulations: logp_tracked
 logp_tracked(data[1], model, result.parameters).history</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">31-element Vector{Main.HabituatingBiasedCoin{Base.RefValue{Float64}}}:
- Main.HabituatingBiasedCoin{Base.RefValue{Float64}}(Base.RefValue{Float64}(-0.0134310854133798))
- Main.HabituatingBiasedCoin{Base.RefValue{Float64}}(Base.RefValue{Float64}(-0.0134310854133798))
- Main.HabituatingBiasedCoin{Base.RefValue{Float64}}(Base.RefValue{Float64}(3.072296986006221))
- Main.HabituatingBiasedCoin{Base.RefValue{Float64}}(Base.RefValue{Float64}(2.7972733434323023))
- Main.HabituatingBiasedCoin{Base.RefValue{Float64}}(Base.RefValue{Float64}(2.440191320875658))
- Main.HabituatingBiasedCoin{Base.RefValue{Float64}}(Base.RefValue{Float64}(1.9421502095601189))
- Main.HabituatingBiasedCoin{Base.RefValue{Float64}}(Base.RefValue{Float64}(1.1629439262618007))
- Main.HabituatingBiasedCoin{Base.RefValue{Float64}}(Base.RefValue{Float64}(-0.3166179315889437))
- Main.HabituatingBiasedCoin{Base.RefValue{Float64}}(Base.RefValue{Float64}(2.302238873409382))
- Main.HabituatingBiasedCoin{Base.RefValue{Float64}}(Base.RefValue{Float64}(1.7372264880616464))
+ Main.HabituatingBiasedCoin{Base.RefValue{Float64}}(Base.RefValue{Float64}(2.330673665753501))
+ Main.HabituatingBiasedCoin{Base.RefValue{Float64}}(Base.RefValue{Float64}(2.330673665753501))
+ Main.HabituatingBiasedCoin{Base.RefValue{Float64}}(Base.RefValue{Float64}(1.8173588051875225))
+ Main.HabituatingBiasedCoin{Base.RefValue{Float64}}(Base.RefValue{Float64}(1.0078239762990922))
+ Main.HabituatingBiasedCoin{Base.RefValue{Float64}}(Base.RefValue{Float64}(-0.5411756968729178))
+ Main.HabituatingBiasedCoin{Base.RefValue{Float64}}(Base.RefValue{Float64}(1.590036909592808))
+ Main.HabituatingBiasedCoin{Base.RefValue{Float64}}(Base.RefValue{Float64}(0.6088785296920625))
+ Main.HabituatingBiasedCoin{Base.RefValue{Float64}}(Base.RefValue{Float64}(-1.43197352545207))
+ Main.HabituatingBiasedCoin{Base.RefValue{Float64}}(Base.RefValue{Float64}(-0.3151928086742939))
+ Main.HabituatingBiasedCoin{Base.RefValue{Float64}}(Base.RefValue{Float64}(2.128440523129812))
  ⋮
- Main.HabituatingBiasedCoin{Base.RefValue{Float64}}(Base.RefValue{Float64}(0.8191839409138822))
- Main.HabituatingBiasedCoin{Base.RefValue{Float64}}(Base.RefValue{Float64}(-1.0816572951543053))
- Main.HabituatingBiasedCoin{Base.RefValue{Float64}}(Base.RefValue{Float64}(0.4914734878516729))
- Main.HabituatingBiasedCoin{Base.RefValue{Float64}}(Base.RefValue{Float64}(-1.8667174656426337))
- Main.HabituatingBiasedCoin{Base.RefValue{Float64}}(Base.RefValue{Float64}(-1.0346359445488114))
- Main.HabituatingBiasedCoin{Base.RefValue{Float64}}(Base.RefValue{Float64}(0.5943749415897299))
- Main.HabituatingBiasedCoin{Base.RefValue{Float64}}(Base.RefValue{Float64}(-1.6152287801718588))
- Main.HabituatingBiasedCoin{Base.RefValue{Float64}}(Base.RefValue{Float64}(-0.5846862545653013))
- Main.HabituatingBiasedCoin{Base.RefValue{Float64}}(Base.RefValue{Float64}(1.638731420855736))</code></pre><p>We can also fit with some fixed parameters.</p><pre><code class="language-julia hljs">result = maximize_logp(data[1], model, fixed = (; η = 0.))
-result.parameters</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">ComponentVector{Float64}(w₀ = 0.0, η = 0.0)</code></pre><p>or with coupled parameters</p><pre><code class="language-julia hljs">result = maximize_logp(data[1], model, coupled = [(:w₀, :η)])
-result.parameters</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">ComponentVector{Float64}(w₀ = -0.09307889501567544, η = -0.09307889501567544)</code></pre><h3 id="Fitting-a-population-model"><a class="docs-heading-anchor" href="#Fitting-a-population-model">Fitting a population model</a><a id="Fitting-a-population-model-1"></a><a class="docs-heading-anchor-permalink" href="#Fitting-a-population-model" title="Permalink"></a></h3><p>Now we fit all data samples with approximate EM, assuming a diagonal normal prior over the parameters.</p><pre><code class="language-julia hljs">import FitPopulations: PopulationModel
+ Main.HabituatingBiasedCoin{Base.RefValue{Float64}}(Base.RefValue{Float64}(-1.2160066741419813))
+ Main.HabituatingBiasedCoin{Base.RefValue{Float64}}(Base.RefValue{Float64}(0.10843383920083749))
+ Main.HabituatingBiasedCoin{Base.RefValue{Float64}}(Base.RefValue{Float64}(-2.631034091281385))
+ Main.HabituatingBiasedCoin{Base.RefValue{Float64}}(Base.RefValue{Float64}(-2.241952814408904))
+ Main.HabituatingBiasedCoin{Base.RefValue{Float64}}(Base.RefValue{Float64}(-1.6855888761722022))
+ Main.HabituatingBiasedCoin{Base.RefValue{Float64}}(Base.RefValue{Float64}(-0.7798621972713498))
+ Main.HabituatingBiasedCoin{Base.RefValue{Float64}}(Base.RefValue{Float64}(1.0410676100507996))
+ Main.HabituatingBiasedCoin{Base.RefValue{Float64}}(Base.RefValue{Float64}(-0.4705004651867435))
+ Main.HabituatingBiasedCoin{Base.RefValue{Float64}}(Base.RefValue{Float64}(1.756776202735628))</code></pre><p>We can also fit with some fixed parameters.</p><pre><code class="language-julia hljs">result = maximize_logp(data[1], model, fixed = (; η = 0.))
+result.parameters</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">ComponentVector{Float64}(w₀ = -0.13353139260903993, η = 0.0)</code></pre><p>or with coupled parameters</p><pre><code class="language-julia hljs">result = maximize_logp(data[1], model, coupled = [(:w₀, :η)])
+result.parameters</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">ComponentVector{Float64}(w₀ = -0.13425227452036267, η = -0.13425227452036267)</code></pre><h3 id="Fitting-a-population-model"><a class="docs-heading-anchor" href="#Fitting-a-population-model">Fitting a population model</a><a id="Fitting-a-population-model-1"></a><a class="docs-heading-anchor-permalink" href="#Fitting-a-population-model" title="Permalink"></a></h3><p>Now we fit all data samples with approximate EM, assuming a diagonal normal prior over the parameters.</p><pre><code class="language-julia hljs">import FitPopulations: PopulationModel
 pop_model1 = PopulationModel(model)
 result1 = maximize_logp(data, pop_model1)
-result1.population_parameters</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">ComponentVector{Float64}(w₀ = -0.016041602133341513, η = -1.5633998166101355, population_parameters = (μ = (w₀ = -0.016041602133341513, η = -1.5633998166101355), σ = (w₀ = 0.8491403308479144, η = 1.0524796254481334)))</code></pre><p>Let us compare this to a model where all samples are assumed to be generated from the same parameters, i.e. the variance of the normal prior is zero.</p><pre><code class="language-julia hljs">pop_model2 = PopulationModel(model, shared = (:w₀, :η))
+result1.population_parameters</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">ComponentVector{Float64}(w₀ = 0.8173235114660938, η = -1.2957288451983804, population_parameters = (μ = (w₀ = 0.8173235114660938, η = -1.2957288451983804), σ = (w₀ = 1.134559626663909, η = 0.9121405152752751)))</code></pre><p>Let us compare this to a model where all samples are assumed to be generated from the same parameters, i.e. the variance of the normal prior is zero.</p><pre><code class="language-julia hljs">pop_model2 = PopulationModel(model, shared = (:w₀, :η))
 result2 = maximize_logp(data, pop_model2)
-result2.population_parameters</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">ComponentVector{Float64}(w₀ = 0.1897654271721817, η = 0.13014539323692556, population_parameters = (μ = Float64[], σ = Float64[]))</code></pre><p>To compare the models we look at the approximate BIC</p><pre><code class="language-julia hljs">import FitPopulations: BIC_int
+result2.population_parameters</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">ComponentVector{Float64}(w₀ = 0.42222853451534464, η = -0.10802660114210133, population_parameters = (μ = Float64[], σ = Float64[]))</code></pre><p>To compare the models we look at the approximate BIC</p><pre><code class="language-julia hljs">import FitPopulations: BIC_int
 (model1 = BIC_int(data, pop_model1, result1.population_parameters, repetitions = 1),
- model2 = BIC_int(data, pop_model2, result2.population_parameters))</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(model1 = [233.79926301511998], model2 = [215.1517403835519])</code></pre><p>We see that the second model without variance of the prior has the lower BIC. This is not surprising, given that the data was generated with identical parameters.</p></article><nav class="docs-footer"><a class="docs-footer-nextpage" href="reference/">Reference »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.25 on <span class="colophon-date" title="Wednesday 5 June 2024 13:24">Wednesday 5 June 2024</span>. Using Julia version 1.10.4.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+ model2 = BIC_int(data, pop_model2, result2.population_parameters))</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(model1 = [234.76334566896392], model2 = [211.3991128819485])</code></pre><p>We see that the second model without variance of the prior has the lower BIC. This is not surprising, given that the data was generated with identical parameters.</p></article><nav class="docs-footer"><a class="docs-footer-nextpage" href="reference/">Reference »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.25 on <span class="colophon-date" title="Friday 7 June 2024 12:21">Friday 7 June 2024</span>. Using Julia version 1.10.4.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
