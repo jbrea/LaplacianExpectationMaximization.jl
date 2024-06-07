@@ -1,4 +1,5 @@
 @testset "single sample recovery" begin
+    Random.seed!(123)
     # BiasedCoin
     m = BiasedCoin()
     p = ComponentArray(F.parameters(m))
