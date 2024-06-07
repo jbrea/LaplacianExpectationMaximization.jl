@@ -354,15 +354,12 @@ function maximize(opt::Optimisers.AbstractRule, data, model, params, g!;
     (; opt, extra = (; lc, gns, dparams))
 end
 function maximize(opt::Symbol, data, model, params, g!;
-                  lb = -Inf, ub = Inf, maxeval = 10^6,
-                  maxtime = 3600, lopt = :LD_LBFGS, verbosity = 1)
+                  lopt = :LD_LBFGS, verbosity = 1, kw...)
     if opt === :MLSL
         o = Opt(:G_MLSL_LDS, length(params))
         o.lower_bounds = lb
         o.upper_bounds = ub
         _lopt = Opt(lopt, length(params))
-#         _lopt.xtol_rel = 1e-3
-#         _lopt.ftol_rel = 1e-5
         o.local_optimizer = _lopt
         o.max_objective = (params, dparams) -> g!(true, dparams, nothing, params)
         o.maxtime = maxtime
@@ -370,11 +367,10 @@ function maximize(opt::Symbol, data, model, params, g!;
         logp, xsol, extra = NLopt.optimize(o, params)
     else
         o = Opt(opt, length(params))
-        o.lower_bounds = lb
-        o.upper_bounds = ub
+        for (k, v) in kw
+            setproperty!(o, k, v)
+        end
         o.max_objective = (params, dparams) -> g!(true, dparams, nothing, params)
-        o.maxtime = maxtime
-        o.maxeval = maxeval
         logp, xsol, extra = NLopt.optimize(o, params)
     end
     (; extra)
