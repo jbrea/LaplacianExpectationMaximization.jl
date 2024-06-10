@@ -6,8 +6,8 @@
     p0 = copy(p)
     data, = F.simulate(m, p, n_steps = 20)
     f = x -> F.logp(data, m, x)
-    g! = F.GradLogP(data, m)
-    h! = F.HessLogP(data, m)
+    g! = F.GradLogP(Val(:Enzyme), data, m)
+    h! = F.HessLogP(Val(:ForwardDiff), data, m)
     p.η = .1
     fix, = F.fix(data, m, p, (; η = -.2), (), 0)
     p.η = .3
@@ -52,8 +52,8 @@
     p0 = copy(p)
     data, = F.simulate(m, p, n_steps = 20, init = [(1, 1)])
     f = x -> F.logp(data, m, x)
-    g! = F.GradLogP(data, m)
-    h! = F.HessLogP(data, m)
+    g! = F.GradLogP(Val(:Enzyme), data, m)
+    h! = F.HessLogP(Val(:ForwardDiff), data, m)
     p.c = 0.
     fix, = F.fix(data, m, p, (; c = 4., η₀ = .5), (), 0)
     p.c = 1.
@@ -79,8 +79,8 @@
     p.w₀ = .1; p.η = -.2
     data, = F.simulate(m, p, n_steps = 20)
     f = x -> F.logp(data, m, x)
-    g! = F.GradLogP(data, m)
-    h! = F.HessLogP(data, m)
+    g! = F.GradLogP(Val(:Enzyme), data, m)
+    h! = F.HessLogP(Val(:ForwardDiff), data, m)
     λ = .1
     fix, = F.fix(data, m, p, (;), (), λ)
     f_fd = p -> logp(data, F._convert_eltype(eltype(p), m), p) - λ/2 * sum(abs2, p)
@@ -124,13 +124,13 @@ end
     p.w₀ = .1; p.η = -.2
     data, = F.simulate(m, p, n_steps = 200)
     res1 = F.maximize_logp(data, m,
-                           gradient_ad = :ForwardDiff,
+                           gradient_ad = Val(:ForwardDiff),
                            verbosity = 0)
     res2 = F.maximize_logp(data, m,
-                           gradient_ad = :Enzyme,
+                           gradient_ad = Val(:Enzyme),
                            verbosity = 0)
     res3 = F.maximize_logp(data, m, F.parameters(m),
-                           gradient_ad = :Enzyme,
+                           gradient_ad = Val(:Enzyme),
                            verbosity = 0)
     @test res1.logp ≈ res2.logp atol = 1e-1
     @test res3.logp ≈ res2.logp atol = 1e-1

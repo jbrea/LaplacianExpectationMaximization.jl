@@ -13,7 +13,7 @@
     data, logp = F.simulate(m.model, p)
     @test F.logp(data, m, p) ≈ logp
     # flat prior, sharing, grad
-    g = F.GradLogP(data, m)
+    g = F.GradLogP(Val(:Enzyme), data, m)
     dp = zero(p)
     g(dp, p)
     # normal prior, no sharing
@@ -29,7 +29,7 @@
     data, logp = F.simulate(m.model, p)
     @test F.logp(data, m, p) ≈ logp + logpdf(Normal(0, 1), p.η)
     # flat prior, sharing, grad
-    g = F.GradLogP(data, m)
+    g = F.GradLogP(Val(:Enzyme), data, m)
     dp = zero(p)
     g(dp, p)
 end
@@ -77,7 +77,7 @@ end
     m1 = F.PopulationModel(BiasedCoin(), prior = F.DiagonalNormalPrior())
     data = [simulate(m1.model, (; w = .3), n_steps = 20)[1] for _ in 1:20]
     res1 = F.maximize_logp(data, m1, verbosity = 0)
-    res1fw = F.maximize_logp(data, m1, verbosity = 0, gradient_ad = :ForwardDiff)
+    res1fw = F.maximize_logp(data, m1, verbosity = 0, gradient_ad = Val(:ForwardDiff))
     m2 = F.PopulationModel(BiasedCoin(), prior = F.DiagonalNormalPrior(), shared = :w)
     res2 = F.maximize_logp(data, m2, verbosity = 0)
     @test sigmoid(res2.parameters[1].w) ≈ mean(vcat(data...))

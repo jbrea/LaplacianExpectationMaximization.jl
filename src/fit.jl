@@ -207,16 +207,17 @@ function fix(parameters, fixed, coupled)
     end
     (x, mask_idxs, drop(parameters, union(keys(fixed), Base.tail.(coupled)...)))
 end
-function fix(data, model, parameters, fixed, coupled, λ; gradient_ad = :Enzyme, hessian_ad = :ForwardDiff)
+function fix(data, model, parameters, fixed, coupled, λ;
+        gradient_ad = Val(:Enzyme), hessian_ad = Val(:ForwardDiff))
     x, mask_idxs, params = fix(parameters, fixed, coupled)
     (Fix(mask_idxs,
-        HessLogP(data, model, x; ad = hessian_ad),
-        zeros(length(x), length(x)),
-        GradLogP(data, model, x; ad = gradient_ad),
-        zero(x),
-        x -> logp(data, model, x),
-        copy(x),
-        λ),
+         HessLogP(hessian_ad, data, model, x),
+         zeros(length(x), length(x)),
+         GradLogP(gradient_ad, data, model, x),
+         zero(x),
+         x -> logp(data, model, x),
+         copy(x),
+         λ),
      params)
 end
 function _set_params_to_population_mean!(x)
@@ -453,8 +454,8 @@ end
                   coupled = [],
                   optimizer = default_optimizer(model, parameters, fixed),
                   lambda_l2 = 0.,
-                  hessian_ad = :ForwardDiff,
-                  gradient_ad = :Enzyme,
+                  hessian_ad = Val(:ForwardDiff),
+                  gradient_ad = Val(:Enzyme),
                   evaluate_training = false,
                   evaluate_test_data = nothing,
                   evaluation_trigger = EventTrigger(),
@@ -474,8 +475,8 @@ function maximize_logp(data, model, parameters = parameters(model);
         evaluation_trigger = EventTrigger(),
         evaluation_options = (;),
         optimizer = default_optimizer(model, parameters; fixed),
-        hessian_ad = :ForwardDiff,
-        gradient_ad = :Enzyme,
+        hessian_ad = Val(:ForwardDiff),
+        gradient_ad = Val(:Enzyme),
         callbacks = [])
     gfunc, params = gradient_function(data, model, ComponentArray(parameters),
                                       NamedTuple(fixed),

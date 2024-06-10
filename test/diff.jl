@@ -4,10 +4,10 @@
     p = ComponentArray(F.parameters(m))
     dp = zero(p)
     data, = F.simulate(m, p)
-    g! = F.GradLogP(data, m)
+    g! = F.GradLogP(Val(:Enzyme), data, m)
     g!(dp, p)
     @test dp ≈ FiniteDiff.finite_difference_gradient(p -> F.logp(data, m, p), p) atol = 1e-8
-    h! = F.HessLogP(data, m)
+    h! = F.HessLogP(Val(:ForwardDiff), data, m)
     H = zeros(length(p), length(p))
     h!(H, p)
     @test H ≈ FiniteDiff.finite_difference_hessian(p -> F.logp(data, m, p), p) rtol = 1e-4
@@ -16,10 +16,10 @@
     p = ComponentArray(F.parameters(m))
     dp = zero(p)
     data, = F.simulate(m, p)
-    g! = F.GradLogP(data, m)
+    g! = F.GradLogP(Val(:Enzyme), data, m)
     g!(dp, p)
     @test dp ≈ FiniteDiff.finite_difference_gradient(p -> F.logp(data, m, p), p)
-    h! = F.HessLogP(data, m)
+    h! = F.HessLogP(Val(:ForwardDiff), data, m)
     H = zeros(length(p), length(p))
     h!(H, p)
     @test H ≈ FiniteDiff.finite_difference_hessian(p -> F.logp(data, m, p), p) rtol = 1e-4
@@ -34,10 +34,10 @@
     p = ComponentArray(F.parameters(m))
     dp = zero(p)
     data, = F.simulate(m.model, p)
-    g! = F.GradLogP(data, m)
+    g! = F.GradLogP(Val(:Enzyme), data, m)
     g!(dp, p)
     @test dp ≈ FiniteDiff.finite_difference_gradient(p -> F.logp(data, m, p), p)
-    h! = F.HessLogP(data, m)
+    h! = F.HessLogP(Val(:ForwardDiff), data, m)
     H = zeros(length(p), length(p))
     h!(H, p)
     @test H ≈ FiniteDiff.finite_difference_hessian(p -> F.logp(data, m, p), p) rtol = 1e-4
@@ -53,10 +53,10 @@
     p = ComponentArray(F.parameters(m))
     dp = zero(p)
     data, = F.simulate(m.model, p)
-    g! = F.GradLogP(data, m)
+    g! = F.GradLogP(Val(:Enzyme), data, m)
     g!(dp, p)
     @test dp ≈ FiniteDiff.finite_difference_gradient(p -> F.logp(data, m, p), p)
-    h! = F.HessLogP(data, m)
+    h! = F.HessLogP(Val(:ForwardDiff), data, m)
     H = zeros(length(p), length(p))
     h!(H, p)
     @test H ≈ FiniteDiff.finite_difference_hessian(p -> F.logp(data, m, p), p) rtol = 1e-4
@@ -74,6 +74,6 @@ end
     p = ComponentArray(F.parameters(m))
     dp = zero(p)
     data, = F.simulate(m, p)
-    @test F.gradient_logp(data, m, p, ad = :ForwardDiff) == F.gradient_logp(data, m, p, ad = :Enzyme)
-    @test_broken F.hessian_logp(data, m, p, ad = :ForwardDiff) == F.hessian_logp(data, m, p, ad = :Enzyme) # see e.g. https://github.com/EnzymeAD/Enzyme.jl/issues/1385
+    @test F.gradient_logp(data, m, p, ad = Val(:ForwardDiff)) == F.gradient_logp(data, m, p, ad = Val(:Enzyme))
+    @test_broken F.hessian_logp(data, m, p, ad = Val(:ForwardDiff)) == F.hessian_logp(data, m, p, ad = Val(:Enzyme)) # see e.g. https://github.com/EnzymeAD/Enzyme.jl/issues/1385
 end

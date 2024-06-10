@@ -12,7 +12,8 @@ end
     parameters
 end
 Base.show(io::IO, ::EnzGradLogP) = println(io, "GradLogP{...}")
-function _EnzGradLogP(data, model, parameters = ComponentArray(parameters(model)))
+function GradLogP(::Val{:Enzyme}, data, model,
+        parameters = ComponentArray(parameters(model)))
     EnzGradLogP(Duplicated([0.], [1.]),
                 Const(data),
                 _deep_ismutable(model) ? Duplicated(model, _zero(model)) :
@@ -63,7 +64,8 @@ function _hess(h::EnzHessLogP)
     autodiff(Forward, _grad2, h.logp, h.dlogp, h.data,
                              h.model, h.dmodel, h.parameters, h.dparameters)
 end
-function _EnzHessLogP(data, model, parameters = ComponentArray(parameters(model)))
+function HessLogP(::Val{:Enzyme}, data, model,
+        parameters = ComponentArray(parameters(model)))
     n = length(parameters)
     vx = ntuple(i -> begin t = _zero(parameters); t[i] = 1; t end, n)
     ddx = ntuple(_ -> _zero(parameters), n)
@@ -94,7 +96,8 @@ end
     cfg
 end
 Base.show(io::IO, ::FWHessLogP) = println(io, "FWHessLogP{...}")
-function _FWHessLogP(data, model, parameters = ComponentArray(parameters(model)))
+function HessLogP(::Val{:ForwardDiff}, data, model,
+        parameters = ComponentArray(parameters(model)))
     f = p -> logp(data, _convert_eltype(eltype(p), model), p)
     cfg = ForwardDiff.HessianConfig(f, parameters)
     FWHessLogP(f, cfg)
@@ -107,7 +110,8 @@ end
     cfg
 end
 Base.show(io::IO, ::FWGradLogP) = println(io, "FWGradLogP{...}")
-function _FWGradLogP(data, model, parameters = ComponentArray(parameters(model)))
+function GradLogP(::Val{:ForwardDiff}, data, model,
+        parameters = ComponentArray(parameters(model)))
     f = p -> logp(data, _convert_eltype(eltype(p), model), p)
     cfg = ForwardDiff.DiffResults.GradientResult(parameters)
     FWGradLogP(f, cfg)
@@ -118,43 +122,25 @@ function (h::FWGradLogP)(dx, x)
     ForwardDiff.DiffResults.value(h.cfg)
 end
 
-###
-### Generic
-###
-function HessLogP(data, model, parameters = ComponentArray(parameters(model)); ad = :ForwardDiff)
-    constructor = if ad === :ForwardDiff
-        _FWHessLogP
-    elseif ad === :Enzyme
-        _EnzHessLogP
-    end
-    constructor(data, model, parameters)
-end
-function GradLogP(data, model, parameters = ComponentArray(parameters(model)); ad = :ForwardDiff)
-    constructor = if ad === :ForwardDiff
-        _FWGradLogP
-    elseif ad === :Enzyme
-        _EnzGradLogP
-    end
-    constructor(data, model, parameters)
-end
 """
-$SIGNATURES
+    gradient_logp(data, model, parameters; ad = Val(:Enzyme))
+
 Compute the gradient of `logp`.
 """
-function gradient_logp(data, model, parameters; ad = :Enzyme)
-    g! = GradLogP(data, model, parameters; ad)
+function gradient_logp(data, model, parameters; ad = Val(:Enzyme))
+    g! = GradLogP(ad, data, model, parameters)
     dp = zero(parameters)
     g!(dp, parameters)
     dp
 end
 gradient_logp(data, model, p::NamedTuple; kw...) = gradient_logp(data, model, ComponentArray(p); kw...)
 """
-    hessian_logp(data, model, parameters; ad = :ForwardDiff)
+    hessian_logp(data, model, parameters; ad = Val(:ForwardDiff))
 
 Compute the hessian of `logp`.
 """
-function hessian_logp(data, model, parameters; ad = :ForwardDiff)
-    h! = HessLogP(data, model, parameters; ad)
+function hessian_logp(data, model, parameters; ad = Val(:ForwardDiff))
+    h! = HessLogP(ad, data, model, parameters)
     H = zeros(length(parameters), length(parameters))
     h!(H, parameters)
 end
