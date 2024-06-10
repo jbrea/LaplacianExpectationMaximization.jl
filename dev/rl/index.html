@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Fitting a Q-Learner · FitPopulations.jl</title><meta name="title" content="Fitting a Q-Learner · FitPopulations.jl"/><meta property="og:title" content="Fitting a Q-Learner · FitPopulations.jl"/><meta property="twitter:title" content="Fitting a Q-Learner · FitPopulations.jl"/><meta name="description" content="Documentation for FitPopulations.jl."/><meta property="og:description" content="Documentation for FitPopulations.jl."/><meta property="twitter:description" content="Documentation for FitPopulations.jl."/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">FitPopulations.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li class="is-active"><a class="tocitem" href>Fitting a Q-Learner</a></li><li><a class="tocitem" href="../reference/">Reference</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>Fitting a Q-Learner</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Fitting a Q-Learner</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/jbrea/FitPopulations.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/jbrea/FitPopulations.jl/blob/main/docs/src/rl.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Fitting-a-Q-Learner"><a class="docs-heading-anchor" href="#Fitting-a-Q-Learner">Fitting a Q-Learner</a><a id="Fitting-a-Q-Learner-1"></a><a class="docs-heading-anchor-permalink" href="#Fitting-a-Q-Learner" title="Permalink"></a></h1><p>We define a Q-Learner that explores an environment with 10 states and 3 actions with softmax policy.</p><pre><code class="language-julia hljs">using FitPopulations
+using ConcreteStructs
+import LogExpFunctions: softplus, logistic
+
+@concrete struct QLearner
+    q
+end
+QLearner() = QLearner(zeros(10, 3))
+
+function FitPopulations.initialize!(m::QLearner, parameters)
+    m.q .= parameters.q₀
+end
+
+FitPopulations.parameters(::QLearner) = (; q₀ = zeros(10, 3), η = 0., β_real = 1., γ_logit = 10.)
+
+function FitPopulations.logp(data, m::QLearner, parameters)
+    initialize!(m, parameters)
+    (; η, β_real, γ_logit) = parameters
+    β = softplus(β_real)
+    γ = logistic(γ_logit)
+    q = m.q
+    logp = 0.
+    for (; s, a, s′, r, done) in data
+        logp += logsoftmax(β, q, s, a)
+        td_error = r + γ * findmax(view(q, s′, :))[1] - q[s, a]
+        q[s, a] += η * td_error
+    end
+    logp
+end
+
+function FitPopulations.sample(rng, data, m::QLearner, parameters; environment)
+    (; η, β_real) = parameters
+    q = m.q
+    (; s′, done) = data[end]
+    if done
+        s′ = initial_state(rng, environment)
+    end
+    a′ = randsoftmax(rng, softplus(β_real), q, s′)
+    s′′ = transition(rng, environment, s′, a′)
+    r′ = reward(rng, environment, s′, a′, s′′)
+    (s = s′, a = a′, s′ = s′′, r = r′, done = isdone(rng, environment, s′′))
+end</code></pre><p>Let us define the helper functions <code>logsoftmax</code>, <code>randsoftmax</code> and the environment functions <code>initial_state</code>, <code>transition</code>, <code>reward</code>, <code>isdone</code>.</p><pre><code class="language-julia hljs">using Distributions, LinearAlgebra
+
+logsoftmax(β, q, s, a) = β * q[s, a] - logsumexp(β, view(q, s, :))
+function logsumexp(β, v)
+    m = β * maximum(v)
+    sumexp = zero(eltype(v))
+    for vᵢ in v
+        sumexp += exp(β * vᵢ - m)
+    end
+    m + log(sumexp)
+end
+function randsoftmax(rng, β, q, s)
+    m = maximum(view(q, s, :))
+    p = exp.(q[s, :] .- m)
+    p ./= sum(p)
+    rand(rng, Categorical(p))
+end
+@concrete struct Environment
+    t
+    r
+end
+function Environment(; rng = Random.default_rng())
+    Environment([normalize(rand(rng, 10), 1) for s in 1:10, a in 1:3],
+                randn(rng, 10, 3))
+end
+initial_state(rng, ::Environment) = rand(rng, 1:10)
+transition(rng, e::Environment, s, a) = rand(rng, Categorical(e.t[s, a]))
+reward(rng, e::Environment, s, a, s′) = e.r[s, a]
+isdone(rng, e::Environment, s) = s == 10</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">isdone (generic function with 1 method)</code></pre><p>With this we can generate some artificial data and fit it.</p><pre><code class="language-julia hljs">using ComponentArrays, Random
+
+model = QLearner()
+p = ComponentArray(parameters(model))
+p.η = .15
+p.β_real = 1.6
+p.γ_logit = 1.8
+rng = Xoshiro(17)
+tmp = [simulate(model, p;
+                n_steps = 200, rng,
+                init = [(s = 1, a = 1, s′ = 1, r = 0., done = false)],
+                environment = Environment(; rng))
+       for _ in 1:100]
+data = first.(tmp)
+data_logp = sum(last.(tmp))</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">-21204.06408975259</code></pre><p>This is the probability with which the data was generated. Let us check the data probability under the default parameters.</p><pre><code class="language-julia hljs">population_model = PopulationModel(model, shared = (:q₀, :η, :β_real, :γ_logit))
+p0 = ComponentArray(parameters(population_model))
+mc_marginal_logp(data, population_model, p0)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">1-element Vector{Float64}:
+ -22082.10700222894</code></pre><p>We see that the data probability under the default parameters is higher than under the parameter with which the data was generated. Now we maximize the log-likelihood, to find the optimal parameters for this data.</p><pre><code class="language-julia hljs">result = maximize_logp(data, population_model)
+result.logp</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">-20475.03585327375</code></pre><p>The resulting data probability is indeed the highest. The fitted parameters are, however, not super close to <code>p</code>:</p><pre><code class="language-julia hljs">result.population_parameters</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">ComponentVector{Float64}(q₀ = [0.15878879844313415 -0.11545150871139574 -0.07595397540106219; -0.059310604229364364 -0.032355648822767084 -0.051184793819906094; … ; 0.02663988721426364 0.14624550935011216 -0.001181111903034862; -0.10842286276756916 0.031954951012102537 0.11165334978604069], η = 0.12868696326418033, β_real = 0.58754919296706, γ_logit = 9.999820584806969, population_parameters = (μ = Float64[], σ = Float64[]))</code></pre><p>We can try fixing <code>q₀</code>:</p><pre><code class="language-julia hljs">result2 = maximize_logp(data, population_model, fixed = (; q₀ = zeros(10, 3)))
+result2.logp</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">-20493.404741248687</code></pre><p>The data probability is a bit lower, as expected.</p><pre><code class="language-julia hljs">result2.population_parameters</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">ComponentVector{Float64}(η = 0.13522445952563164, β_real = 0.5714558493672842, γ_logit = 2.236398419904985, q₀ = [0.0 0.0 0.0; 0.0 0.0 0.0; … ; 0.0 0.0 0.0; 0.0 0.0 0.0], population_parameters = (μ = Float64[], σ = Float64[]))</code></pre><p>The fitted parameters, however, are closer to <code>p</code>.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../">« Home</a><a class="docs-footer-nextpage" href="../reference/">Reference »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.4.1 on <span class="colophon-date" title="Monday 10 June 2024 22:28">Monday 10 June 2024</span>. Using Julia version 1.10.4.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
