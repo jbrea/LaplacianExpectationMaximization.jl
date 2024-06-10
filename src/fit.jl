@@ -351,7 +351,7 @@ end
     opt
     options
 end
-OptimOptimizer(opt; kw...) = OptimOptimizer(opt, Optim.Options(; kw...))
+OptimOptimizer(opt; iterations = 10^6, kw...) = OptimOptimizer(opt, Optim.Options(; iterations, kw...))
 @concrete terse struct SwapSign
     g!
 end
@@ -368,11 +368,11 @@ function maximize(opt::OptimOptimizer, g!, params)
 end
 Base.@kwdef @concrete struct OptimisersOptimizer
     opt = Adam()
-    maxeval = 10^8
+    maxeval = 10^6
     maxtime = Inf
     min_grad_norm = 1e-8
     lower_bounds = -Inf
-    upper_bounds = -Inf
+    upper_bounds = Inf
 end
 function maximize(opt::OptimisersOptimizer, g!, params)
     tstart = time()
@@ -385,7 +385,7 @@ function maximize(opt::OptimisersOptimizer, g!, params)
     dparams = zero(params)
     for _ in 1:opt.maxeval
         logp = g!(true, dparams, nothing, params)
-        state, dp = Optimisers.apply!(opt, state, params, dparams)
+        state, dp = Optimisers.apply!(opt.opt, state, params, dparams)
         params .+= dp
         @. params = max(min(params, ub), lb)
         (time() - tstart > maxtime || sqrt(sum(abs2, dparams)) < min_grad_norm) && break
@@ -405,9 +405,9 @@ function maximize(opt::Optimizer, g!, params)
         (; extra = (; result, result_finetuner))
     catch e
         @error e
-        @info "Optimizing with fallback $(opt.fallback)."
-        g!.fmax[] = -Inf
-        maximize(opt.fallback, g!, params)
+#         @info "Optimizing with fallback $(opt.fallback)."
+#         g!.fmax[] = -Inf
+#         maximize(opt.fallback, g!, params)
     end
 end
 
@@ -427,22 +427,6 @@ function default_optimizer(model::PopulationModel,
         default_optimizer(model.model)
     end
 end
-function default_callbacks(model, parameters = parameters(model);
-        fixed = (;), kw...)
-    _default_callbacks(default_optimizer(model, parameters; fixed); kw...)
-end
-function _default_callbacks(optimizer; verbosity = 1, print_interval = 10)
-    callbacks = []
-    if verbosity > 0
-        callbacks = [callbacks; Callback(TimeTrigger(print_interval), LogProgress())]
-        if isa(optimizer, LaplaceEM)
-
-            callbacks = [callbacks; Callback(EventTrigger((:iteration_end,)),
-                                             _ -> println("Finished EM iteration."))]
-        end
-    end
-    callbacks
-end
 # TODO: Mostly done. Check if this can be futher improved. Use normal arrays everywhere except when calling logp to speed up compilation.
 # TODO: Would it be possible to make this super generic, such that it runs on CPU/GPU, whatever your model runs on?
 # TODO: Only compute diagonal of Hessian if only diagonal is needed. Could this easily be done with Enzyme?
@@ -461,13 +445,13 @@ end
                   evaluation_trigger = EventTrigger(),
                   evaluation_options = (;),
                   callbacks = [],
-                  verbosity = 1, print_interval = 10,
+                  verbosity = 1, print_interval = 3,
                   return_g! = false,
                   )
 
 """
 function maximize_logp(data, model, parameters = parameters(model);
-        verbosity = 1, print_interval = 10, fixed = (;), return_g! = false,
+        verbosity = 1, print_interval = 3, fixed = (;), return_g! = false,
         lambda_l2 = 0.,
         coupled = [],
         evaluate_training = false,
