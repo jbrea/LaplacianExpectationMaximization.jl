@@ -8,6 +8,7 @@ makedocs(
     authors = "Johanni Brea",
     sitename = "FitPopulations.jl",
     pages = Any["Home" => "index.md",
+                "Fitting a Q-Learner" => "rl.md",
                 "Reference" => "reference.md"]
     # strict = true,
     # clean = true,
