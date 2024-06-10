@@ -1,37 +1,116 @@
 ###
 ### OptimizationTracker
 ###
-
-@concrete terse struct OptimizationTracker
+@concrete struct Callback
+    trigger
+    func
+end
+trigger!(::Any, ::Any) = nothing
+trigger!(cb::Callback, event) = trigger!(cb.trigger, event)
+function (cb::Callback)(state)
+    if cb.trigger(state)
+        cb.func(state)
+    end
+end
+@concrete mutable struct TimeTrigger
     t0
+    Δt
+end
+TimeTrigger(Δt) = TimeTrigger(0., Δt)
+function (t::TimeTrigger)(state)
+    if state.i == 1
+        t.t0 = state.t
+    end
+    if state.t - t.t0 > t.Δt
+        t.t0 = state.t
+        return true
+    else
+        return false
+    end
+end
+@concrete mutable struct IterationTrigger
+    i0
+    Δi
+end
+IterationTrigger(Δi) = IterationTrigger(0, Δi)
+function (t::IterationTrigger)(state)
+    if state.i == 1
+        t.i0 = 0
+    end
+    if state.i - t.i0 ≥ t.Δi
+        t.i0 = state.i
+        return true
+    else
+        return false
+    end
+end
+@concrete mutable struct EventTrigger
+    events
+    triggered
+end
+EventTrigger(events = (:start, :iteration_end, :end)) = EventTrigger(events, false)
+function (t::EventTrigger)(::Any)
+    if t.triggered
+        t.triggered = false
+        return true
+    else
+        return false
+    end
+end
+trigger!(t::EventTrigger, event) = t.triggered = event ∈ t.events
+struct Evaluator{E,F}
+    label::Symbol
+    evaluations::E
+    f::F
+end
+function Evaluator(data, model; label = :evaluation)
+    f = params -> logp(data, model, params)
+    Evaluator{Vector{Float64},typeof(f)}(label, Float64[], f)
+end
+function Evaluator(data, model::PopulationModel; label = :evaluation, kw...)
+    f = params -> mc_marginal_logp(data, model, params[1]; kw...)
+    Evaluator{Vector{Vector{Float64}},typeof(f)}(label, [], f)
+end
+function (ev::Evaluator)(state)
+    push!(ev.evaluations, ev.f(state.xmax))
+end
+return_result(ev::Evaluator) = NamedTuple{(ev.label,)}((ev.evaluations,))
+return_result(cb::Callback) = return_result(cb.func)
+return_result(::Any) = (;)
+struct LogProgress
+    function LogProgress()
+        println(" eval   | current    | best")
+        println("_"^33)
+        new()
+    end
+end
+function (::LogProgress)(state)
+    (; i, t, f, fmax) = state
+    @printf "%7i | %10.6g | %10.6g\n" i f fmax
+end
+@concrete terse struct OptimizationTracker
     i
     g
     fmax
     xmax
-    verbosity
-    print_interval
+    callbacks
 end
-function wrap_tracker(g, params; verbosity = 1, print_interval = 2)
-    OptimizationTracker(Ref(0.), Ref(0), g, Ref(-Inf), copy(params), verbosity, float(print_interval))
+function wrap_tracker(g, params;
+        callbacks = [Callback(TimeTrigger(10), LogProgress())])
+    OptimizationTracker(Ref(0), g, Ref(-Inf), copy(params), callbacks)
 end
 function (t::OptimizationTracker)(f, g, H, x)
-    if t.i[] == 0
-        if t.verbosity > 0
-            println(" eval   | current    | best")
-            println("_"^33)
-        end
-        t.t0[] = time()
-    end
     t.i[] += 1
     ret = t.g(f, g, H, x)
     if ret !== nothing && ret > t.fmax[]
         t.fmax[] = ret
         t.xmax .= x
     end
-    t1 = time()
-    if t.verbosity > 0 && t1 - t.t0[] > t.print_interval
-        t.t0[] = t1
-        @printf "%7i | %10.6g | %10.6g\n" t.i[] ret t.fmax[]
+    state = (i = t.i[], t = time(), f = ret, g, H, x,
+             fmax = t.fmax[],
+             xmax = _parameters(t.g))
+    for cb in t.callbacks
+        cb(state)
     end
     ret
 end
@@ -240,141 +319,38 @@ function gradient_function(data, model::PopulationModel, parameters, fixed, coup
                              union(keys(fixed), Base.tail.(coupled)...))))
 end
 
-###
-### maximize_logp
-###
-
-function default_optimizer(::Any, parameters, fixed)
-    Optim.LBFGS()
-#     length(parameters) - length(fixed) < 50 ? :LD_SLSQP : :LD_LBFGS
-end
-function default_optimizer(model::PopulationModel, parameters, fixed)
-    pp = parameters.population_parameters
-    if length(pp) > 0 && length(pp.μ) > 0 && length(setdiff(keys(pp.μ), keys(fixed))) > 0
-        LaplaceEM()
-    else
-        default_optimizer(model.model, parameters, fixed)
-    end
-end
-# TODO: Use normal arrays everywhere except when calling logp to speed up compilation. Mostly done. Check if this can be futher improved.
-# TODO: Would it be possible to make this super generic, such that it runs on CPU/GPU, whatever your model runs on?
-# TODO: Only compute diagonal of Hessian if only diagonal is needed. Could this easily be done with Enzyme?
-# TODO: add kwarg equal_parameters = list of tuples; implement with mask_idxs
-# TODO: Don't require user to specify PopulationModel(model, ...)?
-# TODO: Should I create a separate handling for shared, coupled, fixed, transformed parameters or can I use e.g. ParameterHandling?
-"""
-    maximize_logp(data, model, parameters = parameters(model);
-                  fixed = (;)
-                  coupled = [],
-                  optimizer = default_optimizer(model, parameters, fixed),
-                  lambda_l2 = 0.,
-                  verbosity = 1, print_interval = 10,
-                  return_g! = false,
-                  evaluation = (;),
-                  kw...)
-
-"""
-function maximize_logp(data, model, parameters = parameters(model);
-        verbosity = 1, print_interval = 10, fixed = (;), return_g! = false,
-        lambda_l2 = 0.,
-        coupled = [],
-        optimizer = default_optimizer(model, ComponentArray(parameters), fixed),
-        evaluation = (;),
-        hessian_ad = :ForwardDiff,
-        gradient_ad = :Enzyme,
-        kw...)
-    gfunc, params = gradient_function(data, model, ComponentArray(parameters),
-                                      NamedTuple(fixed),
-                                      coupled, lambda_l2;
-                                      gradient_ad, hessian_ad)
-    g! = wrap_tracker(gfunc, params; verbosity, print_interval)
-    res = if isa(optimizer, LaplaceEM)
-        maximize(optimizer, data, model, params, g!; verbosity, evaluation, kw...)
-    else
-        if !isempty(evaluation)
-            evaluations = [evaluate(data, evaluation.test_data, model,
-                                    population_parameters(g!);
-                                    drop(evaluation, (:test_data,))...)]
-        end
-        _res = maximize_failsafe(optimizer, data, model, params, g!; verbosity, kw...)
-        if !isempty(evaluation)
-            push!(evaluations, evaluate(data, evaluation.test_data, model,
-                                        population_parameters(g!);
-                                        drop(evaluation, (:test_data,))...))
-            merge(_res, (; evaluations, population_parameters = population_parameters(g!)))
-        else
-            pp = population_parameters(g!)
-            if isnothing(pp)
-                _res
-            else
-                merge(_res, (; population_parameters = pp))
-            end
-        end
-    end
-    g!(true, nothing, nothing, g!.xmax) # run once with the optimal parameters such that g.x in the next line is certainly set to the optimum
-    res = merge((; logp = g!.fmax[], parameters = _parameters(g!)), res)
-    if return_g!
-        res = merge(res, (; g!))
-    end
-    res
-end
-maximize_logp(data, model, p::NamedTuple; kw...) = maximize_logp(data, model, ComponentArray(p); kw...)
 
 ###
-### maximize
+### Optimizers
 ###
-function maximize_failsafe(opt, data, model, params, g!; kw...)
-    try
-        # reset fmax
-        g!.fmax[] = -Inf
-        maximize(opt, data, model, params, g!; kw...)
-    catch e
-        @error e
-        @info "Optimizing with Adam instead of $opt."
-        g!.fmax[] = -Inf
-        maximize(Adam(), data, model, params, g!; kw...)
-    end
+@concrete struct NLoptOptimizer
+    opt::Symbol
+    options
 end
-function maximize(opt::Optimisers.AbstractRule, data, model, params, g!;
-                  maxeval = 10^6, maxtime = 3600, min_grad_norm = 1e-8,
-                  lb = -Inf, ub = Inf, verbosity = 1)
-    tstart = time()
-    lc = Float64[]
-    gns = Float64[]
-    state = Optimisers.init(opt, params)
-    dparams = zero(params)
-    for _ in 1:maxeval
-        logp = g!(true, dparams, nothing, params)
-        push!(lc, logp)
-        state, dp = Optimisers.apply!(opt, state, params, dparams)
-        params .+= dp
-        clamp!(params, lb, ub)
-        (time() - tstart > maxtime || sqrt(sum(abs2, dparams)) < min_grad_norm) && break
-    end
-    (; opt, extra = (; lc, gns, dparams))
+function NLoptOptimizer(name; kw...)
+    NLoptOptimizer(name, kw)
 end
-function maximize(opt::Symbol, data, model, params, g!;
-                  lopt = :LD_LBFGS, verbosity = 1, kw...)
-    if opt === :MLSL
-        o = Opt(:G_MLSL_LDS, length(params))
-        o.lower_bounds = lb
-        o.upper_bounds = ub
-        _lopt = Opt(lopt, length(params))
+function maximize(opt::NLoptOptimizer, g!, params)
+    if opt.opt ∈ (:G_MLSL, :G_MLSL_LDS)
+        o = Opt(opt.opt, length(params))
+        _lopt = Opt(opt.options.local_optimizer, length(params))
         o.local_optimizer = _lopt
-        o.max_objective = (params, dparams) -> g!(true, dparams, nothing, params)
-        o.maxtime = maxtime
-        o.maxeval = maxeval
-        logp, xsol, extra = NLopt.optimize(o, params)
     else
-        o = Opt(opt, length(params))
-        for (k, v) in kw
-            setproperty!(o, k, v)
-        end
+        o = Opt(opt.opt, length(params))
         o.max_objective = (params, dparams) -> g!(true, dparams, nothing, params)
-        logp, xsol, extra = NLopt.optimize(o, params)
     end
+    for (k, v) in drop(NamedTuple(opt.options), (:local_optimizer,))
+        setproperty!(o, k, v)
+    end
+    o.max_objective = (params, dparams) -> g!(true, dparams, nothing, params)
+    _, _, extra = NLopt.optimize(o, params)
     (; extra)
 end
+@concrete struct OptimOptimizer
+    opt
+    options
+end
+OptimOptimizer(opt; kw...) = OptimOptimizer(opt, Optim.Options(; kw...))
 @concrete terse struct SwapSign
     g!
 end
@@ -385,12 +361,168 @@ function (s::SwapSign)(f, g, H, x)
     f === nothing || return -res
     nothing
 end
-function maximize(opt::Optim.AbstractOptimizer, data, model, params, g!; maxeval = 10^6, iterations = 10^6, verbosity = 1, kw...)
-    (; extra = Optim.optimize(Optim.only_fgh!(SwapSign(g!)), params, opt, Optim.Options(; iterations, f_calls_limit = maxeval, kw...)))
+function maximize(opt::OptimOptimizer, g!, params)
+    (; extra = Optim.optimize(Optim.only_fgh!(SwapSign(g!)), params,
+                              opt.opt, opt.options))
+end
+Base.@kwdef @concrete struct OptimisersOptimizer
+    opt = Adam()
+    maxeval = 10^8
+    maxtime = Inf
+    min_grad_norm = 1e-8
+    lower_bounds = -Inf
+    upper_bounds = -Inf
+end
+function maximize(opt::OptimisersOptimizer, g!, params)
+    tstart = time()
+    _opt = opt.opt
+    ub = opt.upper_bounds
+    lb = opt.lower_bounds
+    maxtime = opt.maxtime
+    min_grad_norm = opt.min_grad_norm
+    state = Optimisers.init(_opt, params)
+    dparams = zero(params)
+    for _ in 1:opt.maxeval
+        logp = g!(true, dparams, nothing, params)
+        state, dp = Optimisers.apply!(opt, state, params, dparams)
+        params .+= dp
+        @. params = max(min(params, ub), lb)
+        (time() - tstart > maxtime || sqrt(sum(abs2, dparams)) < min_grad_norm) && break
+    end
+    (;)
+end
+Base.@kwdef @concrete struct Optimizer
+    optimizer = OptimOptimizer(Optim.LBFGS())
+    finetuner = nothing
+    fallback = OptimisersOptimizer()
+end
+maximize(::Nothing, ::Any, ::Any) = nothing
+function maximize(opt::Optimizer, g!, params)
+    try
+        result = maximize(opt.optimizer, g!, params)
+        result_finetuner = maximize(opt.finetuner, g!, params)
+        (; extra = (; result, result_finetuner))
+    catch e
+        @error e
+        @info "Optimizing with fallback $(opt.fallback)."
+        g!.fmax[] = -Inf
+        maximize(opt.fallback, g!, params)
+    end
+end
+
+###
+### maximize_logp
+###
+
+function default_optimizer(::Any, parameters = nothing; fixed = (;))
+    Optimizer()
+end
+function default_optimizer(model::PopulationModel,
+        parameters = parameters(model); fixed = (;))
+    pp = parameters.population_parameters
+    if length(pp) > 0 && length(pp.μ) > 0 && length(setdiff(keys(pp.μ), keys(fixed))) > 0
+        LaplaceEM(; model)
+    else
+        default_optimizer(model.model)
+    end
+end
+function default_callbacks(model, parameters = parameters(model);
+        fixed = (;), kw...)
+    _default_callbacks(default_optimizer(model, parameters; fixed); kw...)
+end
+function _default_callbacks(optimizer; verbosity = 1, print_interval = 10)
+    callbacks = []
+    if verbosity > 0
+        callbacks = [callbacks; Callback(TimeTrigger(print_interval), LogProgress())]
+        if isa(optimizer, LaplaceEM)
+
+            callbacks = [callbacks; Callback(EventTrigger((:iteration_end,)),
+                                             _ -> println("Finished EM iteration."))]
+        end
+    end
+    callbacks
+end
+# TODO: Mostly done. Check if this can be futher improved. Use normal arrays everywhere except when calling logp to speed up compilation.
+# TODO: Would it be possible to make this super generic, such that it runs on CPU/GPU, whatever your model runs on?
+# TODO: Only compute diagonal of Hessian if only diagonal is needed. Could this easily be done with Enzyme?
+# TODO: Don't require user to specify PopulationModel(model, ...)?
+# TODO: document new interface (callbacks, triggers, stopper in LaplaceEM)
+"""
+    maximize_logp(data, model, parameters = parameters(model);
+                  fixed = (;)
+                  coupled = [],
+                  optimizer = default_optimizer(model, parameters, fixed),
+                  lambda_l2 = 0.,
+                  hessian_ad = :ForwardDiff,
+                  gradient_ad = :Enzyme,
+                  evaluate_training = false,
+                  evaluate_test_data = nothing,
+                  evaluation_trigger = EventTrigger(),
+                  evaluation_options = (;),
+                  callbacks = [],
+                  verbosity = 1, print_interval = 10,
+                  return_g! = false,
+                  )
+
+"""
+function maximize_logp(data, model, parameters = parameters(model);
+        verbosity = 1, print_interval = 10, fixed = (;), return_g! = false,
+        lambda_l2 = 0.,
+        coupled = [],
+        evaluate_training = false,
+        evaluate_test_data = nothing,
+        evaluation_trigger = EventTrigger(),
+        evaluation_options = (;),
+        optimizer = default_optimizer(model, parameters; fixed),
+        hessian_ad = :ForwardDiff,
+        gradient_ad = :Enzyme,
+        callbacks = [])
+    gfunc, params = gradient_function(data, model, ComponentArray(parameters),
+                                      NamedTuple(fixed),
+                                      coupled, lambda_l2;
+                                      gradient_ad, hessian_ad)
+    if verbosity > 0
+        callbacks = [callbacks; Callback(TimeTrigger(print_interval), LogProgress())]
+    end
+    if evaluate_training
+        callbacks = [callbacks; Callback(evaluation_trigger,
+                                         Evaluator(data, model;
+                                                   label = :training_logp,
+                                                   evaluation_options...))]
+    end
+    if !isnothing(evaluate_test_data)
+        callbacks = [callbacks; Callback(evaluation_trigger,
+                                         Evaluator(evaluate_test_data, model;
+                                                   label = :test_logp,
+                                                   evaluation_options...))]
+    end
+    g! = wrap_tracker(gfunc, params; callbacks)
+    trigger!.(callbacks, :start)
+    res = maximize(optimizer, g!, params)
+    trigger!.(callbacks, :end)
+    g!(true, nothing, nothing, g!.xmax) # run once with the optimal parameters such that g.x in the next line is certainly set to the optimum
+    res = merge((; logp = g!.fmax[], parameters = _parameters(g!)), res)
+    pp = population_parameters(g!)
+    if !isnothing(pp)
+        res = merge((; population_parameters = pp), res)
+    end
+    for cb_return in return_result.(callbacks)
+        res = merge(res, cb_return)
+    end
+    if return_g!
+        res = merge(res, (; g!))
+    end
+    res
 end
 
 # TODO: better accessors
-struct LaplaceEM end
+Base.@kwdef @concrete struct LaplaceEM
+    model
+    Estep_optimizer = Optimizer()
+    derivative_threshold = 1e-3
+    iterations = 10
+    stopper = () -> false
+end
 function mstep!(::DiagonalNormalPrior, g!, Hs)
     ps = g!.g.ps
     N = length(ps)
@@ -408,32 +540,16 @@ function mstep!(::DiagonalNormalPrior, g!, Hs)
         end
     end
 end
-function maximize(::LaplaceEM, data, model, params, g!;
-        iterations = 10, Estep = (;), evaluation = (;),
-        verbosity = 1, derivative_threshold = 1e-3)
-    Estep = merge((; opt = default_optimizer(model.model, params, ())), Estep)
-    evaluation = merge((; test_data = nothing), evaluation)
+function maximize(opt::LaplaceEM, g!, params)
     dp = zero(g!.xmax)
     g!.xmax .= params
-    _population_parameters = population_parameters(g!)
-    evaluations = [evaluate(data, evaluation.test_data, model,
-                            _population_parameters;
-                            drop(evaluation, (:test_data,))...)]
-    m_old, s_old = map(f -> f(evaluations[1].train), [mean, std])
-    for i in 1:iterations
+    for i in 1:opt.iterations
         # E-step
-        (; extra) = maximize_failsafe(Estep.opt, data, model, g!.xmax, g!;
-                                      drop(Estep, (:opt,))...)
-        if verbosity > 1
-            @show extra
-        end
+        maximize(opt.Estep_optimizer, g!, g!.xmax)
         logp = g!(true, dp, nothing, g!.xmax) # sets parameters to optimum
-        if verbosity > 0
-            println("Finished EM iteration $i at logp = $logp.")
-        end
-        dp_max = maximum(abs, dp[1:end-length(model.shared)])
-        if dp_max > derivative_threshold
-            @warn "Skipping M-Step: E-Step may not have converged.\nThe partial derivative with largest absolute value is $dp_max > derivative_threshold = $derivative_threshold."
+        dp_max = maximum(abs, dp[1:end-length(opt.model.shared)])
+        if dp_max > opt.derivative_threshold
+            @warn "Skipping M-Step: E-Step may not have converged.\nThe partial derivative with largest absolute value is $dp_max > derivative_threshold = $(opt.derivative_threshold)."
         else
             Hs = [begin
                       H = zero(g.H)
@@ -442,22 +558,10 @@ function maximize(::LaplaceEM, data, model, params, g!;
                   end
                   for g in g!.g.g_funcs]
             # M-step
-            mstep!(model.prior, g!, Hs)
+            mstep!(opt.model.prior, g!, Hs)
         end
-        # evaluation
-        _evaluations =
-              evaluate(data, evaluation.test_data, model,
-                       g!.g.g_funcs[1].x;
-                       drop(evaluation, (:test_data,))...)
-        m_new, s_new = map(f -> f(_evaluations.train), [mean, std])
-        if i > 1 && m_new - m_old < -(s_new + s_old)/2
-            @info "Stopping EM at iteration $(i-1), because the MC estimate of the training logp decreased."
-            break
-        end
-        push!(evaluations, _evaluations)
-        _population_parameters .= population_parameters(g!)
-        m_old = m_new
-        s_old = s_new
+        trigger!.(g!.callbacks, :iteration_end)
+        opt.stopper() && break
     end
-    (; population_parameters = _population_parameters, evaluations)
+    (;)
 end

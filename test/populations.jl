@@ -41,7 +41,7 @@ end
     g!, optp = F.gradient_function(data, m, p, (;), (), 0)
     @test g!.mask_idxs == [[(1, 1), (2, 2)], [(3, 1), (4, 2)], [(5, 1), (6, 2)]]
     @test length(optp) == 6
-    @test F.default_optimizer(m, p, (;)) == F.LaplaceEM()
+    @test isa(F.default_optimizer(m, p; fixed = (;)), F.LaplaceEM)
     g!, optp = F.gradient_function(data, m, p, (; η = 0), (), 0)
     @test g!.mask_idxs == [[(1, 1)], [(2, 1)], [(3, 1)]]
     @test length(optp) == 3
@@ -76,19 +76,19 @@ end
     Random.seed!(123)
     m1 = F.PopulationModel(BiasedCoin(), prior = F.DiagonalNormalPrior())
     data = [simulate(m1.model, (; w = .3), n_steps = 20)[1] for _ in 1:20]
-    res1 = F.maximize_logp(data, m1, iterations = 5, Estep = (maxeval = 10^3,), verbosity = 0)
-    res1fw = F.maximize_logp(data, m1, iterations = 5, Estep = (maxeval = 10^3,), verbosity = 0, gradient_ad = :ForwardDiff)
+    res1 = F.maximize_logp(data, m1, verbosity = 0)
+    res1fw = F.maximize_logp(data, m1, verbosity = 0, gradient_ad = :ForwardDiff)
     m2 = F.PopulationModel(BiasedCoin(), prior = F.DiagonalNormalPrior(), shared = :w)
-    res2 = F.maximize_logp(data, m2, maxeval = 10^4, verbosity = 0)
+    res2 = F.maximize_logp(data, m2, verbosity = 0)
     @test sigmoid(res2.parameters[1].w) ≈ mean(vcat(data...))
     @test mean(F.BIC_int(data, m1, res1.population_parameters, n_samples = 10^3)) > mean(F.BIC_int(data, m2, res2.population_parameters))
     # different coins
     m1 = F.PopulationModel(BiasedCoin(), prior = F.DiagonalNormalPrior())
     data = [simulate(m1.model, (; w = .4*randn() + .3), n_steps = 50)[1] for _ in 1:50]
-    res1 = F.maximize_logp(data, m1, iterations = 10, Estep = (maxeval = 10^3,), verbosity = 0)
-    @test res1.population_parameters.population_parameters.μ.w ≈ .3 atol = .1
+    res1 = F.maximize_logp(data, m1, verbosity = 0)
+    @test sigmoid(res1.population_parameters.population_parameters.μ.w) ≈ mean(mean(data)) atol = 1e-2
     @test res1.population_parameters.population_parameters.σ.w ≈ .4 atol = .1
     m2 = F.PopulationModel(BiasedCoin(), prior = F.DiagonalNormalPrior(), shared = :w)
-    res2 = F.maximize_logp(data, m2, maxeval = 10^4, verbosity = 0)
+    res2 = F.maximize_logp(data, m2, verbosity = 0)
     @test mean(F.BIC_int(data, m1, res1.population_parameters, n_samples = 10^3)) < mean(F.BIC_int(data, m2, res2.population_parameters))
 end

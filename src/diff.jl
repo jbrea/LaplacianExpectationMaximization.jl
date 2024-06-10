@@ -13,12 +13,11 @@ end
 end
 Base.show(io::IO, ::EnzGradLogP) = println(io, "GradLogP{...}")
 function _EnzGradLogP(data, model, parameters = ComponentArray(parameters(model)))
-    dd = _zero(data)
     EnzGradLogP(Duplicated([0.], [1.]),
-                 Duplicated(convert(typeof(dd), data), dd),
-                 _deep_ismutable(model) ? Duplicated(model, _zero(model)) :
-                                          Const(model),
-                 Duplicated(parameters, _zero(parameters)))
+                Const(data),
+                _deep_ismutable(model) ? Duplicated(model, _zero(model)) :
+                                         Const(model),
+                Duplicated(parameters, _zero(parameters)))
 end
 function (g::EnzGradLogP)(dx, x)
     g.parameters.val .= x
@@ -34,48 +33,45 @@ end
     logp
     dlogp
     data
-    ddata
     model
     dmodel
     parameters
     dparameters
 end
 Base.show(io::IO, ::EnzHessLogP) = println(io, "EnzHessLogP{...}")
-function _grad1(logp, dlogp, data, ddata, model, params, dparams)
+function _grad1(logp, dlogp, data, model, params, dparams)
     autodiff_deferred(Reverse, logp!,
                       DuplicatedNoNeed(logp, dlogp),
-                      DuplicatedNoNeed(data, ddata),
+                      Const(data),
                       Const(model),
                       Duplicated(params, dparams))
     nothing
 end
-function _grad2(logp, dlogp, data, ddata, model, dmodel, params, dparams)
+function _grad2(logp, dlogp, data, model, dmodel, params, dparams)
     autodiff_deferred(Reverse, logp!,
                       DuplicatedNoNeed(logp, dlogp),
-                      DuplicatedNoNeed(data, ddata),
+                      Const(data),
                       DuplicatedNoNeed(model, dmodel),
                       Duplicated(params, dparams))
     nothing
 end
 function _hess(h::EnzHessLogP{<:Const})
-    autodiff(Forward, _grad1, h.logp, h.dlogp, h.data, h.ddata,
+    autodiff(Forward, _grad1, h.logp, h.dlogp, h.data,
                               h.model, h.parameters, h.dparameters)
 end
 function _hess(h::EnzHessLogP)
-    autodiff(Forward, _grad2, h.logp, h.dlogp, h.data, h.ddata,
+    autodiff(Forward, _grad2, h.logp, h.dlogp, h.data,
                              h.model, h.dmodel, h.parameters, h.dparameters)
 end
 function _EnzHessLogP(data, model, parameters = ComponentArray(parameters(model)))
-    dd = _zero(data)
-    _data = convert(typeof(dd), data)
     n = length(parameters)
     vx = ntuple(i -> begin t = _zero(parameters); t[i] = 1; t end, n)
     ddx = ntuple(_ -> _zero(parameters), n)
     EnzHessLogP(Const([0.]), Const([1.]),
-              BatchDuplicated(_data, ntuple(_ -> _zero(dd), n)), BatchDuplicated(_zero(dd), ntuple(_ -> _zero(dd), n)),
-              _deep_ismutable(model) ? BatchDuplicated(model, ntuple(_ -> _zero(model), n)) : Const(model),
-              _deep_ismutable(model) ? BatchDuplicated(_zero(model), ntuple(_ -> _zero(model), n)) : Const(model),
-              BatchDuplicated(parameters, vx), BatchDuplicated(_zero(parameters), ddx))
+                Const(data),
+                _deep_ismutable(model) ? BatchDuplicated(model, ntuple(_ -> _zero(model), n)) : Const(model),
+                _deep_ismutable(model) ? BatchDuplicated(_zero(model), ntuple(_ -> _zero(model), n)) : Const(model),
+                BatchDuplicated(parameters, vx), BatchDuplicated(_zero(parameters), ddx))
 end
 function (h::EnzHessLogP)(ddx, x)
     h.parameters.val .= x
