@@ -18,16 +18,6 @@ end
 
 FitPopulations.parameters(::QLearner) = (; q₀ = zeros(10, 3), η = 0., β_real = 1., γ_logit = 10.)
 
-function mymax(x)
-    res = x[1]
-    for xᵢ in x
-        if xᵢ > res
-            res = xᵢ
-        end
-    end
-    res
-end
-
 function FitPopulations.logp(data, m::QLearner, parameters)
     initialize!(m, parameters)
     (; η, β_real, γ_logit) = parameters
@@ -35,9 +25,9 @@ function FitPopulations.logp(data, m::QLearner, parameters)
     γ = logistic(γ_logit)
     q = m.q
     logp = 0.
-    for (; s, a, s′, a′, r, done) in data
+    for (; s, a, s′, r, done) in data
         logp += logsoftmax(β, q, s, a)
-        td_error = r + γ * mymax(view(q, s′, :)) - q[s, a]
+        td_error = r + γ * findmax(view(q, s′, :))[1] - q[s, a]
         q[s, a] += η * td_error
     end
     logp
@@ -124,4 +114,19 @@ We see that the data probability under the default parameters is higher than und
 result = maximize_logp(data, population_model)
 result.logp
 ```
-The resulting data probability is indeed the highest.
+The resulting data probability is indeed the highest. The fitted parameters are, however, not super close to `p`:
+```@example rl
+result.population_parameters
+```
+
+We can try fixing `q₀`:
+
+```@example rl
+result2 = maximize_logp(data, population_model, fixed = (; q₀ = zeros(10, 3)))
+result2.logp
+```
+The data probability is a bit lower, as expected.
+```@example rl
+result2.population_parameters
+```
+The fitted parameters, however, are closer to `p`.
