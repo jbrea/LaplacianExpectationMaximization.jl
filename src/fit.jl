@@ -1,17 +1,36 @@
 ###
 ### OptimizationTracker
 ###
+"""
+    Callback(trigger, function)
+
+    Callback((trigger1, trigger2, ...), function)
+
+See triggers [`IterationTrigger`](@ref), [`TimeTrigger`](@ref), [`EventTrigger`](@ref).
+For callback functions see [`LogProgress`](@ref), [`Evaluator`](@ref), [`CheckPointSaver`](@ref).
+"""
 @concrete struct Callback
     trigger
     func
 end
 trigger!(::Any, ::Any) = nothing
 trigger!(cb::Callback, event) = trigger!(cb.trigger, event)
+trigger!(cb::Callback{<:Tuple}, event) = trigger!.(cb.trigger, Ref(event))
 function (cb::Callback)(state)
     if cb.trigger(state)
         cb.func(state)
     end
 end
+function (cb::Callback{<:Tuple})(state)
+    if any(map(f -> f(state), cb.trigger))
+        cb.func(state)
+    end
+end
+"""
+    TimeTrigger(Δt)
+
+Triggers every `Δt` seconds.
+"""
 @concrete mutable struct TimeTrigger
     t0
     Δt
@@ -28,6 +47,11 @@ function (t::TimeTrigger)(state)
         return false
     end
 end
+"""
+    IterationTrigger(Δi)
+
+Triggers every `Δi` iterations.
+"""
 @concrete mutable struct IterationTrigger
     i0
     Δi
@@ -44,11 +68,16 @@ function (t::IterationTrigger)(state)
         return false
     end
 end
+"""
+    EventTrigger(events = (:start, :start_finetuner, :start_fallback, :iteration_end, :end))
+
+Triggers at given events.
+"""
 @concrete mutable struct EventTrigger
     events
     triggered
 end
-EventTrigger(events = (:start, :iteration_end, :end)) = EventTrigger(events, false)
+EventTrigger(events = (:start, :start_finetuner, :start_fallback, :iteration_end, :end)) = EventTrigger(events, false)
 function (t::EventTrigger)(::Any)
     if t.triggered
         t.triggered = false
@@ -58,6 +87,11 @@ function (t::EventTrigger)(::Any)
     end
 end
 trigger!(t::EventTrigger, event) = t.triggered = event ∈ t.events
+"""
+    Evaluator(data, model, label = :evaluation, kw...)
+
+Evaluate `logp` or `mc_marginal_logp` on `data`, `model` and current parameters. Keyword arguments `kw` are passed to `logp` or `mc_marginal_logp`. Results are saved with the given label.
+"""
 struct Evaluator{E,F}
     label::Symbol
     evaluations::E
@@ -77,6 +111,23 @@ end
 return_result(ev::Evaluator) = NamedTuple{(ev.label,)}((ev.evaluations,))
 return_result(cb::Callback) = return_result(cb.func)
 return_result(::Any) = (;)
+"""
+    CheckPointSaver(filename)
+
+Saves checkpoints as `JLD2` files.
+"""
+struct CheckPointSaver
+    filename::String
+end
+function (cp::CheckPointSaver)(state)
+    jldopen(cp.filename, "a+") do file
+        file[string(state.i)] = state
+    end
+end
+"""
+    LogProgress()
+
+"""
 struct LogProgress
     function LogProgress()
         println(" eval   | current    | best")
@@ -324,6 +375,11 @@ end
 ###
 ### Optimizers
 ###
+"""
+    NLoptOptimizer(optimizer; options...)
+
+The `optimizer` is a symbol (e.g. `:LD_LBGFS`) as specified [here](https://github.com/JuliaOpt/NLopt.jl?tab=readme-ov-file#the-opt-type). For options, see [NLopt options](https://github.com/JuliaOpt/NLopt.jl?tab=readme-ov-file#using-with-mathoptinterface).
+"""
 @concrete struct NLoptOptimizer
     opt::Symbol
     options
@@ -340,13 +396,19 @@ function maximize(opt::NLoptOptimizer, g!, params)
         o = Opt(opt.opt, length(params))
         o.max_objective = (params, dparams) -> g!(true, dparams, nothing, params)
     end
-    for (k, v) in drop(NamedTuple(opt.options), (:local_optimizer,))
+    for (k, v) in pairs(drop(NamedTuple(opt.options), (:local_optimizer,)))
         setproperty!(o, k, v)
     end
     o.max_objective = (params, dparams) -> g!(true, dparams, nothing, params)
     _, _, extra = NLopt.optimize(o, params)
     (; extra)
 end
+"""
+    OptimOptimizer(optimizer; options...)
+
+Optimizer can be anything from `subtypes.(subtypes(Optim.AbstractOptimizer))`.
+For options, see [Optim Options](https://julianlsolvers.github.io/Optim.jl/stable/user/config/#General-Options).
+"""
 @concrete struct OptimOptimizer
     opt
     options
@@ -366,9 +428,15 @@ function maximize(opt::OptimOptimizer, g!, params)
     (; extra = Optim.optimize(Optim.only_fgh!(SwapSign(g!)), params,
                               opt.opt, opt.options))
 end
+"""
+    OptimisersOptimizer(opt; maxeval = 10^5, maxtime = Inf, min_grad_norm = 1e-8, lower_bounds = -Inf, upper_bounds = Inf)
+
+Optimizer `opt` can be anything from `subtypes(Optimisers.AbstractRule)`.
+Optimization stops, when the L2-norm of the gradient falls below `min_grad_norm` or `maxeval` or `maxtime` is reached. See also [Optimisers](https://fluxml.ai/Optimisers.jl/dev/api/).
+"""
 Base.@kwdef @concrete struct OptimisersOptimizer
     opt = Adam()
-    maxeval = 10^6
+    maxeval = 10^5
     maxtime = Inf
     min_grad_norm = 1e-8
     lower_bounds = -Inf
@@ -392,22 +460,48 @@ function maximize(opt::OptimisersOptimizer, g!, params)
     end
     (;)
 end
+"""
+    Optimizer(; optimizer = OptimOptimizer(Optim.LBFGS()), finetuner = nothing, fallback = OptimisersOptimizer())
+
+Default optimizer. `finetuner` can be another optimizer that is called after the first `optimizer` finished. The `fallback` optimizer is called, if the `optimizer` or `finetuner` fails.
+
+Can also be constructed as
+
+    Optimizer(optimizer; finetuner = nothing, fallback = OptimisersOptimizer(), kw...)
+
+where `optimizer` can be a symbol (to use NLopt), or an optimiser from Optim or Optimiser.
+See also [`NLoptOptimizer`](@ref), [`OptimOptimizer`](@ref), [`OptimisersOptimizer`](@ref).
+"""
 Base.@kwdef @concrete struct Optimizer
     optimizer = OptimOptimizer(Optim.LBFGS())
     finetuner = nothing
     fallback = OptimisersOptimizer()
 end
+function Optimizer(optimizer; finetuner = nothing, fallback = OptimisersOptimizer(maxeval = 10^5), kw...)
+    if isa(optimizer, Symbol)
+        opt = NLoptOptimizer(optimizer, kw)
+    elseif isa(optimizer, Optimisers.AbstractRule)
+        opt = OptimisersOptimizer(optimizer; kw...)
+    else
+        opt = OptimOptimizer(optimizer; kw...)
+    end
+    Optimizer(opt, finetuner, fallback)
+end
 maximize(::Nothing, ::Any, ::Any) = nothing
 function maximize(opt::Optimizer, g!, params)
     try
         result = maximize(opt.optimizer, g!, params)
-        result_finetuner = maximize(opt.finetuner, g!, params)
-        (; extra = (; result, result_finetuner))
+        if !isnothing(opt.finetuner)
+            trigger!.(g!.callbacks, :start_finetuner)
+            result_finetuner = maximize(opt.finetuner, g!, g!.xmax)
+            result = merge(result, (; result_finetuner))
+        end
+        result
     catch e
-        @error e
-#         @info "Optimizing with fallback $(opt.fallback)."
-#         g!.fmax[] = -Inf
-#         maximize(opt.fallback, g!, params)
+        @warn e
+        @info "Optimizing with fallback $(opt.fallback)."
+        trigger!.(g!.callbacks, :start_fallback)
+        maximize(opt.fallback, g!, g!.xmax)
     end
 end
 
@@ -448,6 +542,8 @@ end
                   verbosity = 1, print_interval = 3,
                   return_g! = false,
                   )
+
+See also [`Callback`](@ref).
 
 """
 function maximize_logp(data, model, parameters = parameters(model);
@@ -501,6 +597,11 @@ function maximize_logp(data, model, parameters = parameters(model);
 end
 
 # TODO: better accessors
+"""
+    LaplaceEM(model, Estep_optimizer = Optimizer(), derivative_threshold = 1e-3, iterations = 10, stopper = () -> false)
+
+Implements the Expectation-Maximization (EM) method with Laplace approximation, as described e.g. in [Huys et al. (2012)](http://dx.doi.org/10.1371/journal.pcbi.1002410).
+"""
 Base.@kwdef @concrete struct LaplaceEM
     model
     Estep_optimizer = Optimizer()
@@ -514,7 +615,7 @@ function mstep!(::DiagonalNormalPrior, g!, Hs)
     μ = sum(ps)/N
     second_moment_samples = sum(p.^2 for p in ps)/N
     free_idxs = 1:length(ps[1])
-    second_moment_laplace = -sum(1 ./ clamp.(diag(Hs[i][free_idxs, free_idxs]), -Inf, 0) for i in eachindex(ps))/N
+    second_moment_laplace = -sum(1 ./ clamp.(diag(Hs[i][free_idxs, free_idxs]), -Inf, -eps()) for i in eachindex(ps))/N
     d = second_moment_samples + second_moment_laplace - μ .^ 2
     σ = sqrt.(max.(eps(), d))
     for g in g!.g.g_funcs

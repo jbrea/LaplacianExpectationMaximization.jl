@@ -17,6 +17,26 @@ FitPopulations.PopulationModel
 FitPopulations.maximize_logp
 ```
 
+### Callbacks
+```@docs
+FitPopulations.Callback
+FitPopulations.LogProgress
+FitPopulations.Evaluator
+FitPopulations.CheckPointSaver
+FitPopulations.TimeTrigger
+FitPopulations.IterationTrigger
+FitPopulations.EventTrigger
+```
+
+### Optimizers
+```@docs
+FitPopulations.Optimizer
+FitPopulations.NLoptOptimizer
+FitPopulations.OptimOptimizer
+FitPopulations.OptimisersOptimizer
+FitPopulations.LaplaceEM
+```
+
 ## Simulation
 ```@docs
 FitPopulations.simulate
