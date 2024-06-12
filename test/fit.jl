@@ -117,6 +117,7 @@
     @test H ≈ ForwardDiff.hessian(f_fd, _p)
 end
 
+using JLD2
 @testset "maximize_logp" begin
     Random.seed!(123)
     m = HabituatingBiasedCoin()
@@ -134,4 +135,10 @@ end
                            verbosity = 0)
     @test res1.logp ≈ res2.logp atol = 1e-1
     @test res3.logp ≈ res2.logp atol = 1e-1
+    popdata = [F.simulate(m, p, n_steps = 20).data for _ in 1:30]
+    popm = PopulationModel(m)
+    filename = tempname() * ".jld2"
+    res4 = F.maximize_logp(popdata, popm, evaluate_training = true, print_interval = 1, callbacks = [F.Callback((F.EventTrigger(), F.TimeTrigger(2)), F.CheckPointSaver(filename, overwrite = true))])
+    res5 = load(filename)
+    @test res4.logp == res5[string(last(sort(parse.(Int, keys(res5)))))].logp
 end

@@ -112,16 +112,34 @@ return_result(ev::Evaluator) = NamedTuple{(ev.label,)}((ev.evaluations,))
 return_result(cb::Callback) = return_result(cb.func)
 return_result(::Any) = (;)
 """
-    CheckPointSaver(filename)
+    CheckPointSaver(filename; overwrite = false)
 
 Saves checkpoints as `JLD2` files.
+
+### Examples
+```
+# save every hour and at the end of the simulation.
+Callback((TimeTrigger(3600), EventTrigger((:end,))), CheckPointSaver("fit_results.jld2"))
+# save at the start and at the end of the simulation.
+Callback(EventTrigger((:start, :end)), CheckPointSaver("fit_results.jld2"))
+```
 """
 struct CheckPointSaver
     filename::String
+    function CheckPointSaver(filename; overwrite = false)
+        if isfile(filename)
+            if overwrite
+                rm(filename)
+            else
+                error("File $filename exists. Use `CheckPointSaver(filename, overwrite = true)` to overwrite")
+            end
+        end
+        new(filename)
+    end
 end
 function (cp::CheckPointSaver)(state)
     jldopen(cp.filename, "a+") do file
-        file[string(state.i)] = state
+        file[string(state.i)] = results(state.g!)
     end
 end
 """
@@ -139,27 +157,27 @@ function (::LogProgress)(state)
     (; i, t, f, fmax) = state
     @printf "%7i | %10.6g | %10.6g\n" i f fmax
 end
-@concrete terse struct OptimizationTracker
+@concrete terse mutable struct OptimizationTracker
     i
     g
     fmax
     xmax
     callbacks
 end
-function wrap_tracker(g, params;
-        callbacks = [Callback(TimeTrigger(10), LogProgress())])
-    OptimizationTracker(Ref(0), g, Ref(-Inf), copy(params), callbacks)
+function wrap_tracker(g, params; callbacks = [])
+    OptimizationTracker(0, g, -Inf, copy(params), callbacks)
 end
 function (t::OptimizationTracker)(f, g, H, x)
-    t.i[] += 1
+    t.i += 1
     ret = t.g(f, g, H, x)
-    if ret !== nothing && ret > t.fmax[]
-        t.fmax[] = ret
+    if ret !== nothing && ret > t.fmax
+        t.fmax = ret
         t.xmax .= x
     end
-    state = (i = t.i[], t = time(), f = ret, g, H, x,
-             fmax = t.fmax[],
-             xmax = _parameters(t.g))
+    state = (i = t.i, t = time(), f = ret, g, H, x,
+             fmax = t.fmax,
+             xmax = _parameters(t.g),
+             g! = t)
     for cb in t.callbacks
         cb(state)
     end
@@ -167,6 +185,17 @@ function (t::OptimizationTracker)(f, g, H, x)
 end
 population_parameters(o::OptimizationTracker) = population_parameters(o.g)
 _parameters(o::OptimizationTracker) = _parameters(o.g)
+function results(o, extra = (;))
+    res = merge((; logp = o.fmax[], parameters = _parameters(o)), extra)
+    pp = population_parameters(o)
+    if !isnothing(pp)
+        res = merge((; population_parameters = pp), res)
+    end
+    for cb_return in return_result.(o.callbacks)
+        res = merge(res, cb_return)
+    end
+    res
+end
 
 ###
 ### Fix
@@ -227,8 +256,6 @@ function (g::Fix)(f, dx, H, x)
         end
     end
 end
-# TODO: write tests for coupled and fix tests for fix (new argument)
-# TODO: adapt PopGradLogP
 _indices(x::ComponentArray, label) = getindex(getaxes(x)[1], label).idx
 function fix(parameters, fixed, coupled)
     if !isempty(fixed)
@@ -577,19 +604,15 @@ function maximize_logp(data, model, parameters = parameters(model);
                                                    label = :test_logp,
                                                    evaluation_options...))]
     end
+    if verbosity > 0 && isa(optimizer, LaplaceEM)
+        callbacks = [callbacks; Callback(EventTrigger((:iteration_end,)), _ -> println("Starting M-Step."))]
+    end
     g! = wrap_tracker(gfunc, params; callbacks)
     trigger!.(callbacks, :start)
-    res = maximize(optimizer, g!, params)
+    extra = maximize(optimizer, g!, params)
     trigger!.(callbacks, :end)
     g!(true, nothing, nothing, g!.xmax) # run once with the optimal parameters such that g.x in the next line is certainly set to the optimum
-    res = merge((; logp = g!.fmax[], parameters = _parameters(g!)), res)
-    pp = population_parameters(g!)
-    if !isnothing(pp)
-        res = merge((; population_parameters = pp), res)
-    end
-    for cb_return in return_result.(callbacks)
-        res = merge(res, cb_return)
-    end
+    res = results(g!, extra)
     if return_g!
         res = merge(res, (; g!))
     end
