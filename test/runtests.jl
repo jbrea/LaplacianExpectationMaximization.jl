@@ -2,8 +2,9 @@ using FitPopulations
 import FitPopulations as F
 import FitPopulations: parameters, logp, sample, simulate, initialize!
 using Random, Statistics
+using Optimization, OptimizationOptimJL, Enzyme, Optimisers
 using ComponentArrays, Distributions, ConcreteStructs, LogExpFunctions
-using FiniteDiff, ForwardDiff
+using FiniteDiff, ForwardDiff, ADTypes
 using Test
 
 include("examples.jl")

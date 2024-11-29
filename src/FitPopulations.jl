@@ -1,13 +1,14 @@
 module FitPopulations
 using Random, LinearAlgebra
-using Enzyme, ForwardDiff
+using ADTypes
+using ForwardDiff
 using ConcreteStructs, ComponentArrays, Distributions
 using DocStringExtensions, Printf
-using NLopt, Optimisers
-using JLD2
-import Optim
+using OptimizationCallbacks
+import OptimizationCallbacks: trigger!
+import Optim, Optimisers
 
-export initialize!, parameters, logp, sample, PopulationModel, maximize_logp, simulate, logp_tracked, mc_marginal_logp, BIC_int, gradient_logp, hessian_logp, Callback, CheckPointSaver, EventTrigger, LogProgress, OptimisersOptimizer, Optimizer, IterationTrigger, Evaluator, NLoptOptimizer, TimeTrigger, LaplaceEM
+export initialize!, parameters, logp, sample, PopulationModel, maximize_logp, simulate, logp_tracked, mc_marginal_logp, BIC_int, gradient_logp, hessian_logp, OptimisersOptimizer, Optimizer, NLoptOptimizer, OptimizationOptimizer, OptimOptimizer, LaplaceEM
 
 include("api.jl")
 include("simulate.jl")

@@ -6,8 +6,8 @@
     p0 = copy(p)
     data, = F.simulate(m, p, n_steps = 20)
     f = x -> F.logp(data, m, x)
-    g! = F.GradLogP(Val(:Enzyme), data, m)
-    h! = F.HessLogP(Val(:ForwardDiff), data, m)
+    g! = F.GradLogP(AutoEnzyme(), data, m)
+    h! = F.HessLogP(AutoForwardDiff(), data, m)
     p.η = .1
     fix, = F.fix(data, m, p, (; η = -.2), (), 0)
     p.η = .3
@@ -52,10 +52,10 @@
     p0 = copy(p)
     data, = F.simulate(m, p, n_steps = 20, init = [(1, 1)])
     f = x -> F.logp(data, m, x)
-    g! = F.GradLogP(Val(:Enzyme), data, m)
-    h! = F.HessLogP(Val(:ForwardDiff), data, m)
+    g! = F.GradLogP(AutoForwardDiff(), data, m) # Enzyme 0.13.16 seems broken on this one.
+    h! = F.HessLogP(AutoForwardDiff(), data, m)
     p.c = 0.
-    fix, = F.fix(data, m, p, (; c = 4., η₀ = .5), (), 0)
+    fix, = F.fix(data, m, p, (; c = 4., η₀ = .5), (), 0, gradient_ad = AutoForwardDiff())
     p.c = 1.
     @test fix.x.c .== 4.
     @test fix(true, nothing, nothing, p[KeepIndex(:w₀)]) == F.logp(data, m, p0)
@@ -64,7 +64,7 @@
     dp = zero(x)
     fix(true, dp, nothing, x)
     @test dp ≈ vcat(F.gradient_logp(data, m, p0).w₀...)
-    fix, = F.fix(data, m, p0, (; w₀ = collect(p0.w₀), η₀ = .5), (), 0)
+    fix, = F.fix(data, m, p0, (; w₀ = collect(p0.w₀), η₀ = .5), (), 0, gradient_ad = AutoForwardDiff())
     p.c = 1.
     p.w₀[1] .= randn(3)
     @test fix(true, nothing, nothing, p0[KeepIndex(:c)]) == F.logp(data, m, p0)
@@ -79,8 +79,8 @@
     p.w₀ = .1; p.η = -.2
     data, = F.simulate(m, p, n_steps = 20)
     f = x -> F.logp(data, m, x)
-    g! = F.GradLogP(Val(:Enzyme), data, m)
-    h! = F.HessLogP(Val(:ForwardDiff), data, m)
+    g! = F.GradLogP(AutoEnzyme(), data, m)
+    h! = F.HessLogP(AutoForwardDiff(), data, m)
     λ = .1
     fix, = F.fix(data, m, p, (;), (), λ)
     f_fd = p -> logp(data, F._convert_eltype(eltype(p), m), p) - λ/2 * sum(abs2, p)
@@ -125,20 +125,24 @@ using JLD2
     p.w₀ = .1; p.η = -.2
     data, = F.simulate(m, p, n_steps = 200)
     res1 = F.maximize_logp(data, m,
-                           gradient_ad = Val(:ForwardDiff),
+                           gradient_ad = AutoForwardDiff(),
                            verbosity = 0)
     res2 = F.maximize_logp(data, m,
-                           gradient_ad = Val(:Enzyme),
+                           gradient_ad = AutoEnzyme(),
                            verbosity = 0)
     res3 = F.maximize_logp(data, m, F.parameters(m),
-                           gradient_ad = Val(:Enzyme),
+                           gradient_ad = AutoEnzyme(),
+                           verbosity = 0)
+    res4 = F.maximize_logp(data, m, F.parameters(m),
+                           gradient_ad = AutoEnzyme(),
+                           optimizer = F.OptimizationOptimizer(LBFGS(), AutoForwardDiff(), (;)),
                            verbosity = 0)
     @test res1.logp ≈ res2.logp atol = 1e-1
     @test res3.logp ≈ res2.logp atol = 1e-1
     popdata = [F.simulate(m, p, n_steps = 20).data for _ in 1:30]
     popm = PopulationModel(m)
     filename = tempname() * ".jld2"
-    res4 = F.maximize_logp(popdata, popm, evaluate_training = true, print_interval = 1, callbacks = [F.Callback((F.EventTrigger(), F.TimeTrigger(2)), F.CheckPointSaver(filename, overwrite = true))])
+    res4 = F.maximize_logp(popdata, popm, evaluate_training = true, print_interval = 1, callbacks = [F.Callback((F.EventTrigger((:end,)), F.TimeTrigger(2)), F.CheckPointSaver(filename, overwrite = true))])
     res5 = load(filename)
-    @test res4.logp == res5[string(last(sort(parse.(Int, keys(res5)))))].logp
+    @test res4.logp == res5[string(last(sort(parse.(Int, keys(res5)))))].fmax
 end

@@ -1,162 +1,13 @@
 ###
 ### OptimizationTracker
 ###
-"""
-    Callback(trigger, function)
 
-    Callback((trigger1, trigger2, ...), function)
-
-See triggers [`IterationTrigger`](@ref), [`TimeTrigger`](@ref), [`EventTrigger`](@ref).
-For callback functions see [`LogProgress`](@ref), [`Evaluator`](@ref), [`CheckPointSaver`](@ref).
-"""
-@concrete struct Callback
-    trigger
-    func
-end
-trigger!(::Any, ::Any) = nothing
-trigger!(cb::Callback, event) = trigger!(cb.trigger, event)
-trigger!(cb::Callback{<:Tuple}, event) = trigger!.(cb.trigger, Ref(event))
-function (cb::Callback)(state)
-    if cb.trigger(state)
-        cb.func(state)
-    end
-end
-function (cb::Callback{<:Tuple})(state)
-    if any(map(f -> f(state), cb.trigger))
-        cb.func(state)
-    end
-end
-"""
-    TimeTrigger(Δt)
-
-Triggers every `Δt` seconds.
-"""
-@concrete mutable struct TimeTrigger
-    t0
-    Δt
-end
-TimeTrigger(Δt) = TimeTrigger(0., Δt)
-function (t::TimeTrigger)(state)
-    if state.i == 1
-        t.t0 = state.t
-    end
-    if state.t - t.t0 > t.Δt
-        t.t0 = state.t
-        return true
-    else
-        return false
-    end
-end
-"""
-    IterationTrigger(Δi)
-
-Triggers every `Δi` iterations.
-"""
-@concrete mutable struct IterationTrigger
-    i0
-    Δi
-end
-IterationTrigger(Δi) = IterationTrigger(0, Δi)
-function (t::IterationTrigger)(state)
-    if state.i == 1
-        t.i0 = 0
-    end
-    if state.i - t.i0 ≥ t.Δi
-        t.i0 = state.i
-        return true
-    else
-        return false
-    end
-end
-"""
-    EventTrigger(events = (:start, :start_finetuner, :start_fallback, :iteration_end, :end))
-
-Triggers at given events.
-"""
-@concrete mutable struct EventTrigger
-    events
-    triggered
-end
-EventTrigger(events = (:start, :start_finetuner, :start_fallback, :iteration_end, :end)) = EventTrigger(events, false)
-function (t::EventTrigger)(::Any)
-    if t.triggered
-        t.triggered = false
-        return true
-    else
-        return false
-    end
-end
-trigger!(t::EventTrigger, event) = t.triggered = event ∈ t.events
-"""
-    Evaluator(data, model, label = :evaluation, kw...)
-
-Evaluate `logp` or `mc_marginal_logp` on `data`, `model` and current parameters. Keyword arguments `kw` are passed to `logp` or `mc_marginal_logp`. Results are saved with the given label.
-"""
-struct Evaluator{E,F}
-    label::Symbol
-    evaluations::E
-    f::F
-end
-function Evaluator(data, model; label = :evaluation)
-    f = params -> logp(data, model, params)
-    Evaluator{Vector{Float64},typeof(f)}(label, Float64[], f)
-end
-function Evaluator(data, model::PopulationModel; label = :evaluation, kw...)
-    f = params -> mc_marginal_logp(data, model, params[1]; kw...)
-    Evaluator{Vector{Vector{Float64}},typeof(f)}(label, [], f)
-end
-function (ev::Evaluator)(state)
-    push!(ev.evaluations, ev.f(state.xmax))
-end
+evaluator_function(data, model; kw...) = x -> logp(data, model, x.xmax)
+evaluator_function(data, model::PopulationModel; kw...) = x -> mc_marginal_logp(data, model, x.xmax[1]; kw...)
 return_result(ev::Evaluator) = NamedTuple{(ev.label,)}((ev.evaluations,))
 return_result(cb::Callback) = return_result(cb.func)
 return_result(::Any) = (;)
-"""
-    CheckPointSaver(filename; overwrite = false)
 
-Saves checkpoints as `JLD2` files.
-
-### Examples
-```
-# save every hour and at the end of the simulation.
-Callback((TimeTrigger(3600), EventTrigger((:end,))), CheckPointSaver("fit_results.jld2"))
-# save at the start and at the end of the simulation.
-Callback(EventTrigger((:start, :end)), CheckPointSaver("fit_results.jld2"))
-```
-"""
-struct CheckPointSaver
-    filename::String
-    function CheckPointSaver(filename; overwrite = false)
-        if isfile(filename)
-            if overwrite
-                rm(filename)
-            else
-                error("File $filename exists. Use `CheckPointSaver(filename, overwrite = true)` to overwrite")
-            end
-        end
-        new(filename)
-    end
-end
-function (cp::CheckPointSaver)(state)
-    jldopen(cp.filename, "a+") do file
-        file[string(state.i)] = results(state.g!)
-    end
-end
-"""
-    LogProgress()
-
-"""
-struct LogProgress
-    function LogProgress()
-        println(" eval   | current    | best")
-        println("_"^33)
-        new()
-    end
-end
-function (::LogProgress)(state)
-    (; i, t, f, fmax) = state
-    @printf "%7i | %10.6g | %10.6g\n" i f fmax
-end
 @concrete terse mutable struct OptimizationTracker
     i
     g
@@ -179,7 +30,7 @@ function (t::OptimizationTracker)(f, g, H, x)
              xmax = _parameters(t.g),
              g! = t)
     for cb in t.callbacks
-        cb(state)
+        cb(state, ret)
     end
     ret
 end
@@ -286,7 +137,7 @@ function fix(parameters, fixed, coupled)
     (x, mask_idxs, drop(parameters, union(keys(fixed), Base.tail.(coupled)...)))
 end
 function fix(data, model, parameters, fixed, coupled, λ;
-        gradient_ad = Val(:Enzyme), hessian_ad = Val(:ForwardDiff))
+        gradient_ad = AutoEnzyme(), hessian_ad = AutoForwardDiff())
     x, mask_idxs, params = fix(parameters, fixed, coupled)
     (Fix(mask_idxs,
          HessLogP(hessian_ad, data, model, x),
@@ -403,6 +254,21 @@ end
 ### Optimizers
 ###
 """
+    OptimizationOptimizer(optimizer, adtype, options)
+
+Uses [Optimization.jl](https://docs.sciml.ai/Optimization/stable). `options` are passed to `Optimization.solve`
+
+### Example
+```
+using FitPopulations, Optimization, OptimizationOptimJL, ADTypes
+OptimizationOptimizer(LBFGS(), AutoForwardDiff(), (;))
+"""
+@concrete struct OptimizationOptimizer
+    optimizer
+    adtype
+    options
+end
+"""
     NLoptOptimizer(optimizer; options...)
 
 The `optimizer` is a symbol (e.g. `:LD_LBGFS`) as specified [here](https://github.com/JuliaOpt/NLopt.jl?tab=readme-ov-file#the-opt-type). For options, see [NLopt options](https://github.com/JuliaOpt/NLopt.jl?tab=readme-ov-file#using-with-mathoptinterface).
@@ -413,22 +279,6 @@ The `optimizer` is a symbol (e.g. `:LD_LBGFS`) as specified [here](https://githu
 end
 function NLoptOptimizer(name; kw...)
     NLoptOptimizer(name, kw)
-end
-function maximize(opt::NLoptOptimizer, g!, params)
-    if opt.opt ∈ (:G_MLSL, :G_MLSL_LDS)
-        o = Opt(opt.opt, length(params))
-        _lopt = Opt(opt.options.local_optimizer, length(params))
-        o.local_optimizer = _lopt
-    else
-        o = Opt(opt.opt, length(params))
-        o.max_objective = (params, dparams) -> g!(true, dparams, nothing, params)
-    end
-    for (k, v) in pairs(drop(NamedTuple(opt.options), (:local_optimizer,)))
-        setproperty!(o, k, v)
-    end
-    o.max_objective = (params, dparams) -> g!(true, dparams, nothing, params)
-    _, _, extra = NLopt.optimize(o, params)
-    (; extra)
 end
 """
     OptimOptimizer(optimizer; options...)
@@ -462,7 +312,7 @@ Optimizer `opt` can be anything from `subtypes(Optimisers.AbstractRule)`.
 Optimization stops, when the L2-norm of the gradient falls below `min_grad_norm` or `maxeval` or `maxtime` is reached. See also [Optimisers](https://fluxml.ai/Optimisers.jl/dev/api/).
 """
 Base.@kwdef @concrete struct OptimisersOptimizer
-    opt = Adam()
+    opt = Optimisers.Adam()
     maxeval = 10^5
     maxtime = Inf
     min_grad_norm = 1e-8
@@ -559,8 +409,8 @@ end
                   coupled = [],
                   optimizer = default_optimizer(model, parameters, fixed),
                   lambda_l2 = 0.,
-                  hessian_ad = Val(:ForwardDiff),
-                  gradient_ad = Val(:Enzyme),
+                  hessian_ad = AutoForwardDiff(),
+                  gradient_ad = AutoForwardDiff(),
                   evaluate_training = false,
                   evaluate_test_data = nothing,
                   evaluation_trigger = EventTrigger(),
@@ -570,8 +420,6 @@ end
                   return_g! = false,
                   )
 
-See also [`Callback`](@ref).
-
 """
 function maximize_logp(data, model, parameters = parameters(model);
         verbosity = 1, print_interval = 3, fixed = (;), return_g! = false,
@@ -579,12 +427,13 @@ function maximize_logp(data, model, parameters = parameters(model);
         coupled = [],
         evaluate_training = false,
         evaluate_test_data = nothing,
-        evaluation_trigger = EventTrigger(),
+        evaluation_trigger = EventTrigger((:start, :end, :iteration_end, :start_finetuner, :start_fallback)),
         evaluation_options = (;),
         optimizer = default_optimizer(model, parameters; fixed),
-        hessian_ad = Val(:ForwardDiff),
-        gradient_ad = Val(:Enzyme),
-        callbacks = [])
+        hessian_ad = AutoForwardDiff(),
+        gradient_ad = AutoForwardDiff(),
+        callbacks = [],
+    )
     gfunc, params = gradient_function(data, model, ComponentArray(parameters),
                                       NamedTuple(fixed),
                                       coupled, lambda_l2;
@@ -594,18 +443,17 @@ function maximize_logp(data, model, parameters = parameters(model);
     end
     if evaluate_training
         callbacks = [callbacks; Callback(evaluation_trigger,
-                                         Evaluator(data, model;
-                                                   label = :training_logp,
-                                                   evaluation_options...))]
+                                         Evaluator(evaluator_function(data, model; evaluation_options...),
+                                                   T = Vector{Float64}, label = :training_logp))]
     end
     if !isnothing(evaluate_test_data)
         callbacks = [callbacks; Callback(evaluation_trigger,
-                                         Evaluator(evaluate_test_data, model;
-                                                   label = :test_logp,
-                                                   evaluation_options...))]
+                                         Evaluator(evaluator_function(evaluate_test_data, model;
+                                                                      evaluation_options...);
+                                                   T = Vector{Float64}, label = :test_logp))]
     end
     if verbosity > 0 && isa(optimizer, LaplaceEM)
-        callbacks = [callbacks; Callback(EventTrigger((:iteration_end,)), _ -> println("Starting M-Step."))]
+        callbacks = [callbacks; Callback(EventTrigger((:iteration_end,)), (_, _, _, _) -> println("Starting M-Step."))]
     end
     g! = wrap_tracker(gfunc, params; callbacks)
     trigger!.(callbacks, :start)
