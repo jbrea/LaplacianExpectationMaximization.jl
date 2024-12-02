@@ -386,16 +386,16 @@ end
 ### maximize_logp
 ###
 
-function default_optimizer(::Any, parameters = nothing; fixed = (;))
-    Optimizer()
+function default_optimizer(::Any, parameters = nothing; kw...)
+    Optimizer(; kw...)
 end
 function default_optimizer(model::PopulationModel,
-        parameters = parameters(model); fixed = (;))
+        parameters = parameters(model); fixed = (;), kw...)
     pp = parameters.population_parameters
     if length(pp) > 0 && length(pp.μ) > 0 && length(setdiff(keys(pp.μ), keys(fixed))) > 0
-        LaplaceEM(; model)
+        LaplaceEM(; model, kw...)
     else
-        default_optimizer(model.model)
+        default_optimizer(model.model; kw...)
     end
 end
 # TODO: Mostly done. Check if this can be futher improved. Use normal arrays everywhere except when calling logp to speed up compilation.
@@ -407,7 +407,6 @@ end
     maximize_logp(data, model, parameters = parameters(model);
                   fixed = (;)
                   coupled = [],
-                  optimizer = default_optimizer(model, parameters, fixed),
                   lambda_l2 = 0.,
                   hessian_ad = AutoForwardDiff(),
                   gradient_ad = AutoForwardDiff(),
@@ -415,9 +414,12 @@ end
                   evaluate_test_data = nothing,
                   evaluation_trigger = EventTrigger(),
                   evaluation_options = (;),
+                  optimizer_options = (;),
+                  optimizer = default_optimizer(model, parameters; fixed, optimizer_options...),
                   callbacks = [],
                   verbosity = 1, print_interval = 3,
                   return_g! = false,
+                  kw...
                   )
 
 """
@@ -429,7 +431,8 @@ function maximize_logp(data, model, parameters = parameters(model);
         evaluate_test_data = nothing,
         evaluation_trigger = EventTrigger((:start, :end, :iteration_end, :start_finetuner, :start_fallback)),
         evaluation_options = (;),
-        optimizer = default_optimizer(model, parameters; fixed),
+        optimizer_options = (;),
+        optimizer = default_optimizer(model, parameters; fixed, optimizer_options...),
         hessian_ad = AutoForwardDiff(),
         gradient_ad = AutoForwardDiff(),
         callbacks = [],
