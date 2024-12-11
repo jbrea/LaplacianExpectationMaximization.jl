@@ -1,7 +1,7 @@
 module EnzymeExt
 
 using Enzyme
-import FitPopulations: _zero, _deep_ismutable, ComponentArray, parameters, AutoEnzyme, EnzGradLogP, EnzHessLogP, GradLogP, logp
+import LaplacianExpectationMaximization: _zero, _deep_ismutable, ComponentArray, parameters, AutoEnzyme, EnzGradLogP, EnzHessLogP, GradLogP, logp
 
 function logp!(_logp, data, model, parameters)
     _logp[] = logp(data, model, parameters)

@@ -4,7 +4,7 @@ ComponentArrays = "b0b7db55-cfe3-40fc-9ded-d10e2dbeff66"
 ConcreteStructs = "2569d6c7-a4a2-43d3-a901-331e8e4be471"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
-FitPopulations = "610349f3-aa2e-4e53-b232-3ba00964b24d"
+LaplacianExpectationMaximization = "610349f3-aa2e-4e53-b232-3ba00964b24d"
 LogExpFunctions = "2ab3a3ac-af41-5b50-aa03-7779005ae688"
 
 [compat]

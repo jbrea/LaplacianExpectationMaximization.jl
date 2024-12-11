@@ -1,4 +1,4 @@
-module FitPopulations
+module LaplacianExpectationMaximization
 using Random, LinearAlgebra
 using ADTypes
 using ForwardDiff

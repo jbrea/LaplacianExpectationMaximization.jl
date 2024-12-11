@@ -1,8 +1,8 @@
 module NLoptExt
 
-using NLopt, FitPopulations
+using NLopt, LaplacianExpectationMaximization
 
-function FitPopulations.maximize(opt::FitPopulations.NLoptOptimizer, g!, params)
+function LaplacianExpectationMaximization.maximize(opt::LaplacianExpectationMaximization.NLoptOptimizer, g!, params)
     if opt.opt ∈ (:G_MLSL, :G_MLSL_LDS)
         o = Opt(opt.opt, length(params))
         _lopt = Opt(opt.options.local_optimizer, length(params))
@@ -11,7 +11,7 @@ function FitPopulations.maximize(opt::FitPopulations.NLoptOptimizer, g!, params)
         o = Opt(opt.opt, length(params))
         o.max_objective = (params, dparams) -> g!(true, dparams, nothing, params)
     end
-    for (k, v) in pairs(FitPopulations.drop(NamedTuple(opt.options), (:local_optimizer,)))
+    for (k, v) in pairs(LaplacianExpectationMaximization.drop(NamedTuple(opt.options), (:local_optimizer,)))
         setproperty!(o, k, v)
     end
     o.max_objective = (params, dparams) -> g!(true, dparams, nothing, params)

@@ -3,7 +3,7 @@
 We define a Q-Learner that explores an environment with 10 states and 3 actions with softmax policy.
 
 ```@example rl
-using FitPopulations
+using LaplacianExpectationMaximization
 using ConcreteStructs
 import LogExpFunctions: softplus, logistic
 
@@ -12,13 +12,13 @@ import LogExpFunctions: softplus, logistic
 end
 QLearner() = QLearner(zeros(10, 3))
 
-function FitPopulations.initialize!(m::QLearner, parameters)
+function LaplacianExpectationMaximization.initialize!(m::QLearner, parameters)
     m.q .= parameters.q₀
 end
 
-FitPopulations.parameters(::QLearner) = (; q₀ = zeros(10, 3), η = 0., β_real = 1., γ_logit = 10.)
+LaplacianExpectationMaximization.parameters(::QLearner) = (; q₀ = zeros(10, 3), η = 0., β_real = 1., γ_logit = 10.)
 
-function FitPopulations.logp(data, m::QLearner, parameters)
+function LaplacianExpectationMaximization.logp(data, m::QLearner, parameters)
     initialize!(m, parameters)
     (; η, β_real, γ_logit) = parameters
     β = softplus(β_real)
@@ -33,7 +33,7 @@ function FitPopulations.logp(data, m::QLearner, parameters)
     logp
 end
 
-function FitPopulations.sample(rng, data, m::QLearner, parameters; environment)
+function LaplacianExpectationMaximization.sample(rng, data, m::QLearner, parameters; environment)
     (; η, β_real) = parameters
     q = m.q
     (; s′, done) = data[end]

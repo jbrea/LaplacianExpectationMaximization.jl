@@ -1,8 +1,8 @@
 module OptimizationExt
 
-using FitPopulations, Optimization
+using LaplacianExpectationMaximization, Optimization
 
-function FitPopulations.maximize(opt::FitPopulations.OptimizationOptimizer, g!, params)
+function LaplacianExpectationMaximization.maximize(opt::LaplacianExpectationMaximization.OptimizationOptimizer, g!, params)
     of = OptimizationFunction((p, _) -> g!(true, nothing, nothing, p), opt.adtype,
                               grad = (dp, p, _) -> g!(true, dp, nothing, p),
                               hess = (H, p, _) -> g!(true, nothing, H, p))

@@ -68,9 +68,9 @@ jobs:
   #     - run: |
   #         julia --project=docs -e '
   #           using Documenter: doctest
-  #           using FitPopulations
-  #           DocMeta.setdocmeta!(FitPopulations, :DocTestSetup, :(using FitPopulations); recursive=true)
-  #           doctest(FitPopulations)'
+  #           using LaplacianExpectationMaximization
+  #           DocMeta.setdocmeta!(LaplacianExpectationMaximization, :DocTestSetup, :(using LaplacianExpectationMaximization); recursive=true)
+  #           doctest(LaplacianExpectationMaximization)'
   #     - run: julia --project=docs docs/make.jl
   #       env:
   #         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

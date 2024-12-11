@@ -260,7 +260,7 @@ Uses [Optimization.jl](https://docs.sciml.ai/Optimization/stable). `options` are
 
 ### Example
 ```
-using FitPopulations, Optimization, OptimizationOptimJL, ADTypes
+using LaplacianExpectationMaximization, Optimization, OptimizationOptimJL, ADTypes
 OptimizationOptimizer(LBFGS(), AutoForwardDiff(), (;))
 """
 @concrete struct OptimizationOptimizer
@@ -386,7 +386,7 @@ end
 ### maximize_logp
 ###
 
-function default_optimizer(::Any, parameters = nothing; kw...)
+function default_optimizer(::Any, parameters = nothing; fixed = (;), kw...)
     Optimizer(; kw...)
 end
 function default_optimizer(model::PopulationModel,

@@ -1,4 +1,4 @@
-name = "FitPopulations"
+name = "LaplacianExpectationMaximization"
 uuid = "610349f3-aa2e-4e53-b232-3ba00964b24d"
 authors = ["Johanni Brea <jbrea@users.noreply.github.com>"]
 version = "0.1.0"
