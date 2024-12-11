@@ -445,12 +445,12 @@ function maximize_logp(data, model, parameters = parameters(model);
         callbacks = [callbacks; Callback(TimeTrigger(print_interval), LogProgress())]
     end
     if evaluate_training
-        callbacks = [callbacks; Callback(evaluation_trigger,
+        callbacks = [callbacks; Callback(deepcopy(evaluation_trigger),
                                          Evaluator(evaluator_function(data, model; evaluation_options...),
                                                    T = Vector{Float64}, label = :training_logp))]
     end
     if !isnothing(evaluate_test_data)
-        callbacks = [callbacks; Callback(evaluation_trigger,
+        callbacks = [callbacks; Callback(deepcopy(evaluation_trigger),
                                          Evaluator(evaluator_function(evaluate_test_data, model;
                                                                       evaluation_options...);
                                                    T = Vector{Float64}, label = :test_logp))]
