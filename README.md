@@ -4,7 +4,7 @@
 
 [![Documentation](https://img.shields.io/badge/docs-main-blue.svg)](https://jbrea.github.io/LaplacianExpectationMaximization.jl/dev)
 [![build](https://github.com/jbrea/LaplacianExpectationMaximization.jl/workflows/CI/badge.svg)](https://github.com/jbrea/LaplacianExpectationMaximization.jl/actions?query=workflow%3ACI)
-[![codecov.io](http://codecov.io/github/jbrea/LaplacianExpectationMaximization.jl/coverage.svg?branch=main)](http://codecov.io/github/jbrea/LaplacianExpectationMaximization.jl?branch=master)
+[![codecov](https://codecov.io/gh/jbrea/LaplacianExpectationMaximization.jl/graph/badge.svg?token=M9IY21EQJ6)](https://codecov.io/gh/jbrea/LaplacianExpectationMaximization.jl)
 [![Aqua QA](https://raw.githubusercontent.com/JuliaTesting/Aqua.jl/master/badge.svg)](https://github.com/JuliaTesting/Aqua.jl)
 [![](https://img.shields.io/badge/%F0%9F%9B%A9%EF%B8%8F_tested_with-JET.jl-ffffff)](https://github.com/aviatesk/JET.jl)
 <!-- Tidyverse lifecycle badges, see https://www.tidyverse.org/lifecycle/ Uncomment or delete as needed. -->
