@@ -1,7 +1,7 @@
 name = "LaplacianExpectationMaximization"
 uuid = "610349f3-aa2e-4e53-b232-3ba00964b24d"
-authors = ["Johanni Brea <jbrea@users.noreply.github.com>"]
 version = "0.1.0"
+authors = ["Johanni Brea <jbrea@users.noreply.github.com>"]
 
 [deps]
 ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
@@ -37,7 +37,7 @@ Enzyme = "0.11, 0.12, 0.13"
 ForwardDiff = "0.10, 1"
 LinearAlgebra = "1"
 NLopt = "1"
-Optim = "1"
+Optim = "1, 2"
 Optimisers = "0.3, 0.4"
 Optimization = "4, 5"
 OptimizationCallbacks = "0.1.0"
